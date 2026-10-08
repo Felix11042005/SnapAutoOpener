@@ -1,0 +1,5 @@
+<resources>
+<style name="Theme.SnapAuto" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
+    <item name="colorPrimary">#FFFC00</item><item name="colorPrimaryVariant">#E6E300</item><item name="colorOnPrimary">#000000</item>
+</style>
+</resources>
