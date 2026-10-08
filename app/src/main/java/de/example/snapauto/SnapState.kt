@@ -8,6 +8,8 @@ object SnapState {
     @Volatile var openedInBatch: Int = 0
 
     @Volatile var diagnosticRequested: Boolean = false
+    @Volatile var diagnosticUntil: Long = 0
+    @Volatile var diagnosticBestScore: Int = -1
     @Volatile var diagnosticReport: String =
         "Noch keine Diagnose durchgeführt."
 }
