@@ -52,7 +52,9 @@ class MainActivity : AppCompatActivity() {
             SnapState.batchMode = false
             SnapState.batchStopRequested = true
             SnapState.diagnosticReport =
-                "Diagnose läuft. Warten Sie kurz in Snapchat und kehren Sie dann zu Snap Auto Opener zurück."
+                "Diagnose läuft 15 Sekunden. Wechseln Sie in Snapchat jetzt MANUELL auf Chats und lassen Sie die Chatliste kurz sichtbar."
+            SnapState.diagnosticBestScore = -1
+            SnapState.diagnosticUntil = System.currentTimeMillis() + 15_000
             SnapState.diagnosticRequested = true
 
             launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -60,7 +62,7 @@ class MainActivity : AppCompatActivity() {
 
             Toast.makeText(
                 this,
-                "Diagnose gestartet. Bleiben Sie etwa 2 Sekunden in Snapchat und kehren Sie danach zurück.",
+                "Diagnose läuft 15 Sekunden. Öffnen Sie jetzt MANUELL den Chat-Tab, lassen Sie die Chatliste kurz stehen und kehren Sie danach zurück.",
                 Toast.LENGTH_LONG
             ).show()
         }
