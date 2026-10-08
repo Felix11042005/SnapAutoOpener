@@ -35,13 +35,17 @@ class SnapAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event?.packageName?.toString() != "com.snapchat.android") return
 
-        if (SnapState.diagnosticRequested && !diagnosticCaptured) {
-            diagnosticCaptured = true
-            handler.postDelayed({
-                captureDiagnosticTree()
-                SnapState.diagnosticRequested = false
-                diagnosticCaptured = false
-            }, 1200)
+        if (SnapState.diagnosticRequested) {
+            captureDiagnosticTree()
+
+            if (!diagnosticFinalizeScheduled) {
+                diagnosticFinalizeScheduled = true
+                val remaining = (SnapState.diagnosticUntil - System.currentTimeMillis()).coerceAtLeast(500L)
+                handler.postDelayed({
+                    SnapState.diagnosticRequested = false
+                    diagnosticFinalizeScheduled = false
+                }, remaining)
+            }
         }
 
         if (SnapState.batchMode && !SnapState.batchStopRequested) {
@@ -135,17 +139,23 @@ class SnapAccessibilityService : AccessibilityService() {
             }
         }
 
-        SnapState.diagnosticReport = buildString {
-            appendLine("Snapchat Accessibility-Diagnose")
-            appendLine("Gesamtknoten: $total")
-            appendLine("Knoten mit Text/Description: $withText")
-            appendLine("Klickbare Knoten: $clickable")
-            appendLine("Scrollbare Knoten: $scrollable")
-            appendLine()
-            if (lines.isEmpty()) {
-                appendLine("Keine verwertbaren UI-Knoten gefunden.")
-            } else {
-                append(lines.take(120).joinToString("\n"))
+        val score = withText * 4 + clickable * 2 + scrollable * 3 + total
+
+        if (score >= SnapState.diagnosticBestScore) {
+            SnapState.diagnosticBestScore = score
+            SnapState.diagnosticReport = buildString {
+                appendLine("Snapchat Accessibility-Diagnose (bester Snapshot)")
+                appendLine("Gesamtknoten: $total")
+                appendLine("Knoten mit Text/Description: $withText")
+                appendLine("Klickbare Knoten: $clickable")
+                appendLine("Scrollbare Knoten: $scrollable")
+                appendLine("Snapshot-Score: $score")
+                appendLine()
+                if (lines.isEmpty()) {
+                    appendLine("Keine verwertbaren UI-Knoten gefunden.")
+                } else {
+                    append(lines.take(120).joinToString("\n"))
+                }
             }
         }
     }
