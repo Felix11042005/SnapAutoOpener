@@ -37,6 +37,34 @@ class MainActivity : AppCompatActivity() {
             updateProfileStatus(showToast = true)
         }
 
+        findViewById<Button>(R.id.runDiagnostic).setOnClickListener {
+            val launchIntent = packageManager.getLaunchIntentForPackage(snapchatPackage)
+
+            if (launchIntent == null) {
+                Toast.makeText(
+                    this,
+                    "Snapchat ist in diesem Android-Bereich nicht sichtbar.",
+                    Toast.LENGTH_LONG
+                ).show()
+                return@setOnClickListener
+            }
+
+            SnapState.batchMode = false
+            SnapState.batchStopRequested = true
+            SnapState.diagnosticReport =
+                "Diagnose läuft. Warten Sie kurz in Snapchat und kehren Sie dann zu Snap Auto Opener zurück."
+            SnapState.diagnosticRequested = true
+
+            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(launchIntent)
+
+            Toast.makeText(
+                this,
+                "Diagnose gestartet. Bleiben Sie etwa 2 Sekunden in Snapchat und kehren Sie danach zurück.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+
         findViewById<Button>(R.id.openExisting).setOnClickListener {
             val launchIntent = packageManager.getLaunchIntentForPackage(snapchatPackage)
 
@@ -76,11 +104,18 @@ class MainActivity : AppCompatActivity() {
         }
 
         updateProfileStatus(showToast = false)
+        updateDiagnosticReport()
     }
 
     override fun onResume() {
         super.onResume()
         updateProfileStatus(showToast = false)
+        updateDiagnosticReport()
+    }
+
+    private fun updateDiagnosticReport() {
+        findViewById<TextView>(R.id.diagnosticReport).text =
+            SnapState.diagnosticReport
     }
 
     private fun updateProfileStatus(showToast: Boolean) {
