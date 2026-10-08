@@ -14,6 +14,7 @@ class SnapAccessibilityService : AccessibilityService() {
     private var batchBusy = false
     private var emptyPasses = 0
     private var chatTabAttempted = false
+    private var diagnosticCaptured = false
 
     private val snapKeywords = listOf(
         "new snap",
@@ -29,13 +30,19 @@ class SnapAccessibilityService : AccessibilityService() {
         "video"
     )
 
-    private val chatKeywords = listOf(
-        "chat",
-        "chats"
-    )
+    private val chatKeywords = listOf("chat", "chats")
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event?.packageName?.toString() != "com.snapchat.android") return
+
+        if (SnapState.diagnosticRequested && !diagnosticCaptured) {
+            diagnosticCaptured = true
+            handler.postDelayed({
+                captureDiagnosticTree()
+                SnapState.diagnosticRequested = false
+                diagnosticCaptured = false
+            }, 1200)
+        }
 
         if (SnapState.batchMode && !SnapState.batchStopRequested) {
             scheduleBatchStep()
@@ -47,6 +54,100 @@ class SnapAccessibilityService : AccessibilityService() {
 
         lastAttempt = System.currentTimeMillis()
         handler.postDelayed({ tryOpenPendingSnap() }, 500)
+    }
+
+    private fun captureDiagnosticTree() {
+        val root = rootInActiveWindow
+
+        if (root == null) {
+            SnapState.diagnosticReport =
+                "Snapchat wurde erkannt, aber rootInActiveWindow ist NULL. " +
+                "Android/Snapchat stellt dem Accessibility-Service aktuell keinen lesbaren UI-Baum bereit."
+            return
+        }
+
+        val queue = ArrayDeque<Pair<AccessibilityNodeInfo, Int>>()
+        queue.add(root to 0)
+
+        val lines = mutableListOf<String>()
+        var total = 0
+        var withText = 0
+        var clickable = 0
+        var scrollable = 0
+
+        while (queue.isNotEmpty() && total < 250) {
+            val (node, depth) = queue.removeFirst()
+            total++
+
+            val text = node.text?.toString().orEmpty()
+            val desc = node.contentDescription?.toString().orEmpty()
+            val viewId = node.viewIdResourceName.orEmpty()
+            val clazz = node.className?.toString().orEmpty()
+
+            if (text.isNotBlank() || desc.isNotBlank()) withText++
+            if (node.isClickable) clickable++
+            if (node.isScrollable) scrollable++
+
+            val bounds = Rect()
+            node.getBoundsInScreen(bounds)
+
+            if (
+                text.isNotBlank() ||
+                desc.isNotBlank() ||
+                node.isClickable ||
+                node.isScrollable
+            ) {
+                lines += buildString {
+                    append("#")
+                    append(total)
+                    append(" d=")
+                    append(depth)
+                    append(" class=")
+                    append(clazz.takeLast(40))
+                    append(" click=")
+                    append(node.isClickable)
+                    append(" scroll=")
+                    append(node.isScrollable)
+                    append(" bounds=")
+                    append(bounds.flattenToString())
+
+                    if (text.isNotBlank()) {
+                        append(" text=\"")
+                        append(text.take(80).replace("\n", " "))
+                        append("\"")
+                    }
+
+                    if (desc.isNotBlank()) {
+                        append(" desc=\"")
+                        append(desc.take(80).replace("\n", " "))
+                        append("\"")
+                    }
+
+                    if (viewId.isNotBlank()) {
+                        append(" id=")
+                        append(viewId.takeLast(60))
+                    }
+                }
+            }
+
+            for (i in 0 until node.childCount) {
+                node.getChild(i)?.let { queue.add(it to (depth + 1)) }
+            }
+        }
+
+        SnapState.diagnosticReport = buildString {
+            appendLine("Snapchat Accessibility-Diagnose")
+            appendLine("Gesamtknoten: $total")
+            appendLine("Knoten mit Text/Description: $withText")
+            appendLine("Klickbare Knoten: $clickable")
+            appendLine("Scrollbare Knoten: $scrollable")
+            appendLine()
+            if (lines.isEmpty()) {
+                appendLine("Keine verwertbaren UI-Knoten gefunden.")
+            } else {
+                append(lines.take(120).joinToString("\n"))
+            }
+        }
     }
 
     private fun tryOpenPendingSnap() {
@@ -127,7 +228,6 @@ class SnapAccessibilityService : AccessibilityService() {
 
     private fun clickSnapLikeNode(root: AccessibilityNodeInfo?): Boolean {
         if (root == null) return false
-
         val candidate = findBestMatchingNode(root, snapKeywords)
         return clickNodeOrParent(candidate)
     }
