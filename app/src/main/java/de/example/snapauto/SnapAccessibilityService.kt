@@ -14,7 +14,7 @@ class SnapAccessibilityService : AccessibilityService() {
     private var batchBusy = false
     private var emptyPasses = 0
     private var chatTabAttempted = false
-    private var diagnosticCaptured = false
+    private var diagnosticFinalizeScheduled = false
 
     private val snapKeywords = listOf(
         "new snap",
