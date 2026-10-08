@@ -11,7 +11,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Snap Auto Opener V2.1"
+            android:text="Snap Auto Opener V2.2"
             android:textStyle="bold"
             android:textSize="28sp"
             android:layout_marginBottom="12dp" />
@@ -19,7 +19,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Private-Space-Modus: Installieren und starten Sie diese App im selben vertraulichen Bereich wie Snapchat. Die App spricht ausschließlich die Snapchat-Instanz an, die in ihrem eigenen Android-Profil sichtbar ist."
+            android:text="Private-Space-Modus: Installieren und starten Sie diese App im selben vertraulichen Bereich wie Snapchat."
             android:textSize="16sp"
             android:layout_marginBottom="18dp" />
 
@@ -51,6 +51,24 @@
             android:text="2. Bedienungshilfe aktivieren"
             android:layout_marginTop="12dp" />
 
+        <Button
+            android:id="@+id/runDiagnostic"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="3. Snapchat-Oberfläche analysieren"
+            android:layout_marginTop="18dp" />
+
+        <TextView
+            android:id="@+id/diagnosticReport"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Noch keine Diagnose durchgeführt."
+            android:textIsSelectable="true"
+            android:typeface="monospace"
+            android:textSize="12sp"
+            android:padding="12dp"
+            android:layout_marginTop="10dp" />
+
         <Switch
             android:id="@+id/enabledSwitch"
             android:layout_width="match_parent"
@@ -75,7 +93,13 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Wichtig: Sobald der vertrauliche Bereich gesperrt wird, stoppt Android die darin befindlichen Apps. Automatisches Öffnen funktioniert deshalb nur, solange der vertrauliche Bereich entsperrt und aktiv ist."
+            android:text="Diagnose speichert nur Accessibility-Metadaten wie Text, Content-Description, Klassen und Positionen lokal im Arbeitsspeicher. Es werden keine Screenshots erstellt oder Daten hochgeladen."
             android:layout_marginTop="24dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Wichtig: Sobald der vertrauliche Bereich gesperrt wird, stoppt Android die darin befindlichen Apps."
+            android:layout_marginTop="14dp" />
     </LinearLayout>
 </ScrollView>
