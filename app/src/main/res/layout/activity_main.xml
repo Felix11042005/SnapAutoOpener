@@ -1,10 +1,81 @@
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="24dp">
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Snap Auto Opener V2" android:textStyle="bold" android:textSize="28sp" android:layout_marginBottom="12dp"/>
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Lokale UI-Automatisierung. Keine Snapchat-Zugangsdaten werden gespeichert." android:textSize="16sp" android:layout_marginBottom="24dp"/>
-<Button android:id="@+id/notificationAccess" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="1. Benachrichtigungszugriff aktivieren"/>
-<Button android:id="@+id/accessibilityAccess" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="2. Bedienungshilfe aktivieren" android:layout_marginTop="12dp"/>
-<Switch android:id="@+id/enabledSwitch" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Neue Snaps automatisch öffnen" android:layout_marginTop="24dp"/>
-<Button android:id="@+id/openExisting" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Alle vorhandenen Snaps öffnen" android:layout_marginTop="24dp"/>
-<Button android:id="@+id/stopBatch" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Durchlauf stoppen" android:layout_marginTop="10dp"/>
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="V2 durchsucht sichtbare Snapchat-Einträge nach ungeöffneten Snaps, öffnet sie nacheinander und scrollt anschließend weiter. Gerät entsperrt lassen. Snapchat-UI-Änderungen können eine Anpassung der Erkennung erfordern." android:layout_marginTop="24dp"/>
-</LinearLayout>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Snap Auto Opener V2.1"
+            android:textStyle="bold"
+            android:textSize="28sp"
+            android:layout_marginBottom="12dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Private-Space-Modus: Installieren und starten Sie diese App im selben vertraulichen Bereich wie Snapchat. Die App spricht ausschließlich die Snapchat-Instanz an, die in ihrem eigenen Android-Profil sichtbar ist."
+            android:textSize="16sp"
+            android:layout_marginBottom="18dp" />
+
+        <TextView
+            android:id="@+id/profileStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Profilstatus wird geprüft …"
+            android:textStyle="bold"
+            android:layout_marginBottom="12dp" />
+
+        <Button
+            android:id="@+id/checkProfile"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Snapchat in diesem Bereich prüfen" />
+
+        <Button
+            android:id="@+id/notificationAccess"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="1. Benachrichtigungszugriff aktivieren"
+            android:layout_marginTop="18dp" />
+
+        <Button
+            android:id="@+id/accessibilityAccess"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="2. Bedienungshilfe aktivieren"
+            android:layout_marginTop="12dp" />
+
+        <Switch
+            android:id="@+id/enabledSwitch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Neue Snaps automatisch öffnen"
+            android:layout_marginTop="24dp" />
+
+        <Button
+            android:id="@+id/openExisting"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Alle vorhandenen Snaps öffnen"
+            android:layout_marginTop="24dp" />
+
+        <Button
+            android:id="@+id/stopBatch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Durchlauf stoppen"
+            android:layout_marginTop="10dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Wichtig: Sobald der vertrauliche Bereich gesperrt wird, stoppt Android die darin befindlichen Apps. Automatisches Öffnen funktioniert deshalb nur, solange der vertrauliche Bereich entsperrt und aktiv ist."
+            android:layout_marginTop="24dp" />
+    </LinearLayout>
+</ScrollView>
