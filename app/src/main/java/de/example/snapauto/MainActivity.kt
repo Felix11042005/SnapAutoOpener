@@ -144,6 +144,10 @@ class MainActivity : AppCompatActivity() {
         val lastSnapEvent = prefs.getLong("last_snap_event_at", 0L)
         val rootAvailable = prefs.getBoolean("root_available", false)
         val rootPackage = prefs.getString("root_package", "-") ?: "-"
+        val screenshotOk = prefs.getBoolean("screenshot_ok", false)
+        val visualCandidates = prefs.getInt("visual_candidates", 0)
+        val visualOpened = prefs.getInt("visual_opened", 0)
+        val visualStatus = prefs.getString("visual_status", "-") ?: "-"
         val events = prefs.getInt("event_count", 0)
         val snapEvents = prefs.getInt("snap_event_count", 0)
         val startedAt = prefs.getLong("diagnostic_started_at", 0L)
@@ -160,10 +164,10 @@ class MainActivity : AppCompatActivity() {
             !alive -> "ERGEBNIS: Accessibility-Service ist NICHT verbunden."
             startedAt > 0 && diagnosticAge > 20_000 && snapEvents == 0 ->
                 "ERGEBNIS: Service läuft, aber es kam KEIN Snapchat-Accessibility-Event an."
-            snapEvents > 0 && !rootAvailable ->
-                "ERGEBNIS: Snapchat-Events kommen an, aber Android liefert KEINEN lesbaren UI-Baum."
-            snapEvents > 0 && rootAvailable ->
-                "ERGEBNIS: Snapchat-Events UND UI-Baum sind verfügbar."
+            screenshotOk ->
+                "ERGEBNIS: V3 Screenshot-Zugriff funktioniert."
+            snapEvents > 0 ->
+                "ERGEBNIS: Snapchat-Events kommen an. V3 wartet auf Screenshot-Diagnose."
             else -> "ERGEBNIS: Service läuft. Diagnose starten und Snapchat-Chatliste öffnen."
         }
 
@@ -174,8 +178,10 @@ class MainActivity : AppCompatActivity() {
             appendLine("Letztes Event: ${time(lastEvent)}")
             appendLine("Letztes Snapchat-Event: ${time(lastSnapEvent)}")
             appendLine("Events / Snapchat: $events / $snapEvents")
-            appendLine("rootInActiveWindow: ${if (rootAvailable) "JA" else "NEIN"}")
-            append("Root-Paket: $rootPackage")
+            appendLine("Screenshot: ${if (screenshotOk) "JA" else "NEIN"}")
+            appendLine("Visuelle Kandidaten: $visualCandidates")
+            appendLine("Visuell geöffnet: $visualOpened")
+            append("V3-Status: $visualStatus")
         }
 
         findViewById<TextView>(R.id.diagnosticReport).text = report
