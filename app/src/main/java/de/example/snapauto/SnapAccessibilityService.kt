@@ -10,6 +10,8 @@ import android.os.Handler
 import android.os.Looper
 import android.view.Display
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
+import android.graphics.Rect
 import kotlin.math.max
 import kotlin.math.min
 
@@ -28,6 +30,8 @@ class SnapAccessibilityService : AccessibilityService() {
     private var lastViewerSignature = 0L
     private var unchangedViewerFrames = 0
     private var activeBatchId = -1
+    private var filterAttempts = 0
+    private var filterWasClicked = false
 
     private val heartbeat = object : Runnable {
         override fun run() {
@@ -188,6 +192,8 @@ class SnapAccessibilityService : AccessibilityService() {
             activeBatchId = runId
             batchSeenY.clear()
             batchPhase = 0
+            filterAttempts = 0
+            filterWasClicked = false
             viewerTaps = 0
             unchangedViewerFrames = 0
             batchBusy = false
@@ -215,11 +221,44 @@ class SnapAccessibilityService : AccessibilityService() {
             val h = bitmap.height
             if (batchPhase == 0) {
                 bitmap.recycle()
-                batchPhase = 1
-                prefs.edit().putString("visual_status", "Aktiviere Ungelesen-Filter.").apply()
-                tap(w * 0.17f, h * 0.149f) {
+                val root = rootInActiveWindow
+                val unread = findNodeWithText(root, "Ungelesen")
+                val selected = unread?.isSelected == true || unread?.isChecked == true ||
+                    unread?.parent?.isSelected == true || unread?.parent?.isChecked == true
+                if (selected) {
+                    batchPhase = 1
+                    prefs.edit().putString("visual_status", "Ungelesen-Filter bestätigt.").apply()
+                    batchBusy = false
+                    handler.postDelayed({ if (isBatchActive(runId)) runManualBatch() }, 1250L)
+                    return@takeVisualSnapshot
+                }
+                if (unread == null) {
+                    finishBatch("Filter 'Ungelesen' im Accessibility-Baum nicht gefunden. Keine blinden Tipps.")
+                    batchBusy = false
+                    return@takeVisualSnapshot
+                }
+                if (filterWasClicked) {
+                    finishBatch("Filter wurde angetippt, aber Aktivierung nicht bestätigt. Bitte Diagnose senden.")
+                    batchBusy = false
+                    return@takeVisualSnapshot
+                }
+                val bounds = Rect()
+                unread.getBoundsInScreen(bounds)
+                val clickable = findClickableAncestor(unread)
+                filterAttempts++
+                filterWasClicked = true
+                prefs.edit().putString("visual_status", "Ungelesen gefunden bei (${bounds.centerX()},${bounds.centerY()}); aktiviere Filter.").apply()
+                if (clickable != null && clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
                     batchBusy = false
                     handler.postDelayed({ if (isBatchActive(runId)) runManualBatch() }, 1350L)
+                } else if (!bounds.isEmpty) {
+                    tap(bounds.centerX().toFloat(), bounds.centerY().toFloat()) {
+                        batchBusy = false
+                        handler.postDelayed({ if (isBatchActive(runId)) runManualBatch() }, 1350L)
+                    }
+                } else {
+                    finishBatch("Filter hat keine nutzbare Bildschirmposition.")
+                    batchBusy = false
                 }
                 return@takeVisualSnapshot
             }
@@ -251,9 +290,16 @@ class SnapAccessibilityService : AccessibilityService() {
                 return@takeVisualSnapshot
             }
             // Never blindly tap when the chat list is visible.
-            val chatListVisible = looksLikeChatList(bitmap)
+            val root = rootInActiveWindow
+            val chatListVisible = findNodeWithText(root, "Ungelesen") != null || looksLikeChatList(bitmap)
+            val adVisible = hasAdvertisingMarker(root)
             val signature = visualSignature(bitmap)
             bitmap.recycle()
+            if (adVisible) {
+                finishBatch("Werbung erkannt: automatisches Weitertippen aus Sicherheitsgründen gestoppt.")
+                batchBusy = false
+                return@takeVisualSnapshot
+            }
             if (chatListVisible) {
                 batchPhase = 1
                 batchBusy = false
@@ -274,16 +320,53 @@ class SnapAccessibilityService : AccessibilityService() {
             prefs.edit().putString("visual_status", "Snap-Serie: Weiter-Tipp $viewerTaps/8.").apply()
             tap(w * 0.82f, h * 0.53f) {
                 batchBusy = false
-                handler.postDelayed({ if (isBatchActive(runId)) runManualBatch() }, 1400L)
+                handler.postDelayed({ if (isBatchActive(runId)) runManualBatch() }, 950L)
             }
         }
+    }
+
+    private fun findNodeWithText(root: AccessibilityNodeInfo?, target: String): AccessibilityNodeInfo? {
+        if (root == null) return null
+        val queue = java.util.ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        var visited = 0
+        while (!queue.isEmpty() && visited++ < 600) {
+            val node = queue.removeFirst()
+            val label = node.text?.toString().orEmpty() + " " + node.contentDescription?.toString().orEmpty()
+            if (label.contains(target, ignoreCase = true)) return node
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        return null
+    }
+
+    private fun findClickableAncestor(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        var current: AccessibilityNodeInfo? = node
+        repeat(5) {
+            if (current?.isClickable == true) return current
+            current = current?.parent
+        }
+        return null
+    }
+
+    private fun hasAdvertisingMarker(root: AccessibilityNodeInfo?): Boolean {
+        if (root == null) return false
+        val queue = java.util.ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        var visited = 0
+        while (!queue.isEmpty() && visited++ < 350) {
+            val node = queue.removeFirst()
+            val text = (node.text?.toString().orEmpty() + " " + node.contentDescription?.toString().orEmpty()).trim()
+            if (text.equals("Anzeige", true) || text.equals("Gesponsert", true) || text.equals("Sponsored", true) || text.equals("Ad", true)) return true
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        return false
     }
 
     private fun finishBatch(reason: String) {
         SnapState.batchMode = false
         prefs.edit()
             .putString("visual_status", "Durchlauf beendet: $reason")
-            .putString("diagnostic_report", "V3.4: $reason\\nChat-Öffnungsversuche: ${SnapState.openedInBatch}. Weitere Snaps innerhalb eines Chats werden nicht separat gezählt.")
+            .putString("diagnostic_report", "V3.5: $reason\nChat-Öffnungsversuche: ${SnapState.openedInBatch}. Weitere Snaps innerhalb eines Chats werden nicht separat gezählt.")
             .apply()
     }
 
