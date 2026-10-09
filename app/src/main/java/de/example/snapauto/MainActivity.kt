@@ -79,6 +79,7 @@ class MainActivity : AppCompatActivity() {
             SnapState.diagnosticBestScore = -1
             SnapState.diagnosticUntil = now + 30_000
             SnapState.diagnosticRequested = true
+            SnapState.singleTapRequested = false
 
             Toast.makeText(this, "30 Sekunden: Jetzt Snapchat im ARBEITSPROFIL manuell öffnen.", Toast.LENGTH_LONG).show()
         }
@@ -92,19 +93,26 @@ class MainActivity : AppCompatActivity() {
         }
 
         findViewById<Button>(R.id.openExisting).setOnClickListener {
-            val launchIntent = packageManager.getLaunchIntentForPackage(snapchatPackage)
-            if (launchIntent == null) {
-                SnapState.batchMode = false
-                Toast.makeText(this, "Snapchat ist in diesem Android-Profil nicht sichtbar.", Toast.LENGTH_LONG).show()
-                updateProfileStatus(false)
+            val now = System.currentTimeMillis()
+            val diag = getSharedPreferences("snapauto_diag", MODE_PRIVATE)
+            val alive = diag.getBoolean("service_connected", false) &&
+                now - diag.getLong("heartbeat_at", 0L) < 2500
+            if (!alive) {
+                Toast.makeText(this, "Accessibility-Service nicht verbunden.", Toast.LENGTH_LONG).show()
                 return@setOnClickListener
             }
-
-            SnapState.batchMode = true
-            SnapState.batchStopRequested = false
-            SnapState.openedInBatch = 0
-            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            startActivity(launchIntent)
+            SnapState.batchMode = false
+            SnapState.batchStopRequested = true
+            SnapState.pendingUntil = 0L
+            SnapState.diagnosticRequested = false
+            SnapState.singleTapUntil = now + 30_000L
+            SnapState.singleTapRequested = true
+            diag.edit()
+                .putString("visual_status", "Einzeltest bereit: Snapchat-Arbeitsprofil manuell öffnen.")
+                .putString("diagnostic_report", "Einzeltest: Innerhalb von 30 Sekunden Snapchat im Arbeitsprofil öffnen und Chatliste anzeigen. Höchstens ein Tipp auf einen farbigen Kandidaten; danach STOPP. Keine Rücknavigation.")
+                .putInt("visual_opened", 0)
+                .apply()
+            Toast.makeText(this, "Einzeltest bereit: Snapchat im Arbeitsprofil öffnen (30 Sek.).", Toast.LENGTH_LONG).show()
         }
 
         findViewById<Button>(R.id.stopBatch).setOnClickListener {
