@@ -11,7 +11,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Snap Auto Opener V2.2"
+            android:text="Snap Auto Opener V2.3 Diagnose"
             android:textStyle="bold"
             android:textSize="28sp"
             android:layout_marginBottom="12dp" />
@@ -19,7 +19,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Private-Space-Modus: Installieren und starten Sie diese App im selben vertraulichen Bereich wie Snapchat."
+            android:text="Diagnose-Build für Haupt-, Arbeits- und vertrauliche Profile."
             android:textSize="16sp"
             android:layout_marginBottom="18dp" />
 
@@ -35,7 +35,7 @@
             android:id="@+id/checkProfile"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Snapchat in diesem Bereich prüfen" />
+            android:text="Snapchat in diesem Profil prüfen" />
 
         <Button
             android:id="@+id/notificationAccess"
@@ -51,11 +51,22 @@
             android:text="2. Bedienungshilfe aktivieren"
             android:layout_marginTop="12dp" />
 
+        <TextView
+            android:id="@+id/serviceStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Service-Status wird geprüft …"
+            android:textIsSelectable="true"
+            android:typeface="monospace"
+            android:textSize="13sp"
+            android:padding="12dp"
+            android:layout_marginTop="12dp" />
+
         <Button
             android:id="@+id/runDiagnostic"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="3. Snapchat-Oberfläche analysieren"
+            android:text="3. 20-Sekunden-Diagnose starten"
             android:layout_marginTop="18dp" />
 
         <TextView
@@ -93,13 +104,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Diagnose speichert nur Accessibility-Metadaten wie Text, Content-Description, Klassen und Positionen lokal im Arbeitsspeicher. Es werden keine Screenshots erstellt oder Daten hochgeladen."
+            android:text="Die Diagnose speichert nur Accessibility-Metadaten lokal auf dem Gerät. Keine Screenshots und kein Upload."
             android:layout_marginTop="24dp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Wichtig: Sobald der vertrauliche Bereich gesperrt wird, stoppt Android die darin befindlichen Apps."
-            android:layout_marginTop="14dp" />
     </LinearLayout>
 </ScrollView>
