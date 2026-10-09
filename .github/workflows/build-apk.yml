@@ -11,6 +11,10 @@ jobs:
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
     steps:
       - name: Checkout
@@ -27,12 +31,35 @@ jobs:
         with:
           gradle-version: "8.9"
 
-      - name: Build debug APK
-        run: gradle :app:assembleDebug --stacktrace
+      - name: Build APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${KEYSTORE_B64:-}" ] && [ -n "${ANDROID_KEYSTORE_PASSWORD:-}" ] && [ -n "${ANDROID_KEY_ALIAS:-}" ] && [ -n "${ANDROID_KEY_PASSWORD:-}" ]; then
+            echo "$KEYSTORE_B64" | base64 --decode > "$GITHUB_WORKSPACE/app/snapauto-release.jks"
+            export ANDROID_KEYSTORE_PATH="$GITHUB_WORKSPACE/app/snapauto-release.jks"
+            gradle :app:assembleRelease --stacktrace
+            cp app/build/outputs/apk/release/app-release.apk /tmp/SnapAutoOpener.apk
+            echo "SIGNED_BUILD=true" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Signing secrets are missing. Building debug APK only."
+            gradle :app:assembleDebug --stacktrace
+            cp app/build/outputs/apk/debug/app-debug.apk /tmp/SnapAutoOpener.apk
+            echo "SIGNED_BUILD=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Verify signing mode
+        shell: bash
+        run: |
+          if [ "$SIGNED_BUILD" = "true" ]; then
+            echo "Stable signed release APK created."
+          else
+            echo "Debug APK created. Add the four signing secrets before using this build as the permanent update base."
+          fi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SnapAutoOpener-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: SnapAutoOpener-apk
+          path: /tmp/SnapAutoOpener.apk
           if-no-files-found: error
