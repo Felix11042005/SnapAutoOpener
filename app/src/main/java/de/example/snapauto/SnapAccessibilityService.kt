@@ -342,7 +342,8 @@ class SnapAccessibilityService : AccessibilityService() {
     private fun findClickableAncestor(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
         var current: AccessibilityNodeInfo? = node
         repeat(5) {
-            if (current?.isClickable == true) return current
+            val candidate = current ?: return null
+            if (candidate.isClickable) return candidate
             current = current?.parent
         }
         return null
