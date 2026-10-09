@@ -32,13 +32,10 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        val prefs = getSharedPreferences("snapauto", MODE_PRIVATE)
         val toggle = findViewById<Switch>(R.id.enabledSwitch)
-
-        toggle.isChecked = prefs.getBoolean("enabled", false)
-        toggle.setOnCheckedChangeListener { _, checked ->
-            prefs.edit().putBoolean("enabled", checked).apply()
-        }
+        toggle.isChecked = false
+        toggle.isEnabled = false
+        toggle.visibility = android.view.View.GONE
 
         findViewById<Button>(R.id.notificationAccess).setOnClickListener {
             startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
@@ -80,6 +77,7 @@ class MainActivity : AppCompatActivity() {
             SnapState.diagnosticUntil = now + 30_000
             SnapState.diagnosticRequested = true
             SnapState.singleTapRequested = false
+            SnapState.batchRunId++
 
             Toast.makeText(this, "30 Sekunden: Jetzt Snapchat im ARBEITSPROFIL manuell öffnen.", Toast.LENGTH_LONG).show()
         }
@@ -101,23 +99,28 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this, "Accessibility-Service nicht verbunden.", Toast.LENGTH_LONG).show()
                 return@setOnClickListener
             }
-            SnapState.batchMode = false
-            SnapState.batchStopRequested = true
+            SnapState.batchMode = true
+            SnapState.batchStopRequested = false
+            SnapState.openedInBatch = 0
             SnapState.pendingUntil = 0L
             SnapState.diagnosticRequested = false
-            SnapState.singleTapUntil = now + 30_000L
-            SnapState.singleTapRequested = true
+            SnapState.singleTapRequested = false
+            SnapState.batchUntil = now + 120_000L
+            SnapState.batchRunId++
             diag.edit()
-                .putString("visual_status", "Einzeltest bereit: Snapchat-Arbeitsprofil manuell öffnen.")
-                .putString("diagnostic_report", "Einzeltest: Innerhalb von 30 Sekunden Snapchat im Arbeitsprofil öffnen und Chatliste anzeigen. Höchstens ein Tipp auf einen farbigen Kandidaten; danach STOPP. Keine Rücknavigation.")
+                .putString("visual_status", "Manueller Durchlauf bereit: Snapchat im Arbeitsprofil öffnen.")
+                .putString("diagnostic_report", "Manueller Durchlauf gestartet. Maximal 10 Tipp-Versuche, 120 Sekunden, danach Stopp.")
                 .putInt("visual_opened", 0)
                 .apply()
-            Toast.makeText(this, "Einzeltest bereit: Snapchat im Arbeitsprofil öffnen (30 Sek.).", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Jetzt Snapchat im Arbeitsprofil öffnen. Maximal 10 Versuche.", Toast.LENGTH_LONG).show()
         }
 
         findViewById<Button>(R.id.stopBatch).setOnClickListener {
             SnapState.batchStopRequested = true
             SnapState.batchMode = false
+            SnapState.batchRunId++
+            SnapState.singleTapRequested = false
+            SnapState.pendingUntil = 0L
             Toast.makeText(this, "Durchlauf gestoppt. Geöffnet: ${SnapState.openedInBatch}", Toast.LENGTH_SHORT).show()
         }
 
