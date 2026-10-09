@@ -55,7 +55,7 @@ class MainActivity : AppCompatActivity() {
             diagPrefs.edit()
                 .putBoolean("diagnostic_running", true)
                 .putLong("diagnostic_started_at", now)
-                .putString("diagnostic_report", "Profil-Test läuft 30 Sekunden. Öffnen Sie Snapchat im ARBEITSPROFIL manuell und wechseln Sie zur Chatliste. Es werden keine Gesten ausgeführt.")
+                .putString("diagnostic_report", "Profil-Test läuft 30 Sekunden. Öffnen Sie Snapchat im VERTRAULICHEN PROFIL manuell und wechseln Sie zur Chatliste. Es werden keine Gesten ausgeführt.")
                 .putInt("diagnostic_score", -1)
                 .putInt("event_count", 0)
                 .putInt("snap_event_count", 0)
@@ -72,14 +72,14 @@ class MainActivity : AppCompatActivity() {
             SnapState.batchMode = false
             SnapState.batchStopRequested = true
             SnapState.pendingUntil = 0L
-            SnapState.diagnosticReport = "Profil-Test gestartet. Snapchat im Arbeitsprofil manuell öffnen."
+            SnapState.diagnosticReport = "Profil-Test gestartet. Snapchat im vertraulichen Profil manuell öffnen."
             SnapState.diagnosticBestScore = -1
             SnapState.diagnosticUntil = now + 30_000
             SnapState.diagnosticRequested = true
             SnapState.singleTapRequested = false
             SnapState.batchRunId++
 
-            Toast.makeText(this, "30 Sekunden: Jetzt Snapchat im ARBEITSPROFIL manuell öffnen.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "30 Sekunden: Jetzt Snapchat im VERTRAULICHEN PROFIL manuell öffnen.", Toast.LENGTH_LONG).show()
         }
 
         findViewById<Button>(R.id.copyDiagnostic).setOnClickListener {
@@ -108,11 +108,11 @@ class MainActivity : AppCompatActivity() {
             SnapState.batchUntil = now + 120_000L
             SnapState.batchRunId++
             diag.edit()
-                .putString("visual_status", "Manueller Durchlauf bereit: Snapchat im Arbeitsprofil öffnen.")
-                .putString("diagnostic_report", "Manueller Durchlauf gestartet. Maximal 10 Tipp-Versuche, 120 Sekunden, danach Stopp.")
+                .putString("visual_status", "Manueller Durchlauf bereit: Snapchat im vertraulichen Profil öffnen.")
+                .putString("diagnostic_report", "Manueller Durchlauf gestartet. Filter muss bestätigt werden; maximal 10 Chat-Versuche und 120 Sekunden.")
                 .putInt("visual_opened", 0)
                 .apply()
-            Toast.makeText(this, "Jetzt Snapchat im Arbeitsprofil öffnen. Maximal 10 Versuche.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Jetzt Snapchat im vertraulichen Profil öffnen. Maximal 10 Versuche.", Toast.LENGTH_LONG).show()
         }
 
         findViewById<Button>(R.id.stopBatch).setOnClickListener {
@@ -121,7 +121,7 @@ class MainActivity : AppCompatActivity() {
             SnapState.batchRunId++
             SnapState.singleTapRequested = false
             SnapState.pendingUntil = 0L
-            Toast.makeText(this, "Durchlauf gestoppt. Geöffnet: ${SnapState.openedInBatch}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Durchlauf gestoppt. Chat-Versuche: ${SnapState.openedInBatch}", Toast.LENGTH_SHORT).show()
         }
 
         updateProfileStatus(false)
