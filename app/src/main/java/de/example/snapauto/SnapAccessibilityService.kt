@@ -21,9 +21,9 @@ class SnapAccessibilityService : AccessibilityService() {
     private var visualBusy = false
     private var lastScreenshotAt = 0L
     private var singleTapBusy = false
-    private var navigatedToChats = false
-    private var visualScrollPasses = 0
-    private var lastOpenedY = -1f
+    private var batchBusy = false
+    private var batchSeenY = mutableListOf<Float>()
+    private var activeBatchId = -1
 
     private val heartbeat = object : Runnable {
         override fun run() {
@@ -74,14 +74,7 @@ class SnapAccessibilityService : AccessibilityService() {
         }
 
         if (SnapState.batchMode && !SnapState.batchStopRequested) {
-            scheduleVisualStep(450)
-            return
-        }
-
-        if (System.currentTimeMillis() <= SnapState.pendingUntil) {
-            SnapState.batchMode = true
-            SnapState.batchStopRequested = false
-            scheduleVisualStep(450)
+            runManualBatch()
         }
     }
 
@@ -185,85 +178,91 @@ class SnapAccessibilityService : AccessibilityService() {
         }
     }
 
-    private fun scheduleVisualStep(delay: Long) {
-        if (visualBusy) return
-        visualBusy = true
-        handler.postDelayed({
-            visualBusy = false
-            if (!SnapState.batchMode || SnapState.batchStopRequested) return@postDelayed
-            visualStep()
-        }, delay)
-    }
-
-    private fun visualStep() {
-        if (!navigatedToChats) {
-            navigatedToChats = true
-            prefs.edit().putString("visual_status", "Wische von Kamera zu Chats …").apply()
-            swipeToChats {
-                scheduleVisualStep(1100)
-            }
+    private fun runManualBatch() {
+        val runId = SnapState.batchRunId
+        if (activeBatchId != runId) {
+            activeBatchId = runId
+            batchSeenY.clear()
+            batchBusy = false
+        }
+        if (!isBatchActive(runId)) {
+            SnapState.batchMode = false
             return
         }
-
+        if (batchBusy || visualBusy || System.currentTimeMillis() - lastScreenshotAt < 1200L) return
+        batchBusy = true
+        visualBusy = true
         takeVisualSnapshot { bitmap ->
-            if (bitmap == null) {
-                prefs.edit()
-                    .putString("visual_status", "Screenshot konnte nicht aufgenommen werden.")
-                    .putBoolean("screenshot_ok", false)
-                    .apply()
-                SnapState.batchMode = false
+            visualBusy = false
+            if (!isBatchActive(runId)) {
+                bitmap?.recycle()
+                batchBusy = false
                 return@takeVisualSnapshot
             }
-
-            prefs.edit()
-                .putBoolean("screenshot_ok", true)
-                .putInt("screenshot_width", bitmap.width)
-                .putInt("screenshot_height", bitmap.height)
-                .apply()
-
+            if (bitmap == null) {
+                batchBusy = false
+                prefs.edit().putString("visual_status", "Screenshot fehlgeschlagen; warte auf nächstes Event.").apply()
+                return@takeVisualSnapshot
+            }
+            val w = bitmap.width
+            val h = bitmap.height
             val candidates = findSnapMarkers(bitmap)
             bitmap.recycle()
-
-            prefs.edit()
-                .putInt("visual_candidates", candidates.size)
-                .putString(
-                    "visual_status",
-                    if (candidates.isEmpty()) "Keine roten/lila Snap-Marker gefunden."
-                    else "${candidates.size} möglicher Snap-Marker gefunden."
-                )
-                .apply()
-
-            if (candidates.isNotEmpty()) {
-                val candidate = candidates
-                    .filter { lastOpenedY < 0f || kotlin.math.abs(it.second - lastOpenedY) > 30f }
-                    .minByOrNull { it.second }
-                    ?: candidates.minByOrNull { it.second }!!
-
-                lastOpenedY = candidate.second
-                tap(candidate.first, candidate.second) {
-                    SnapState.openedInBatch++
-                    prefs.edit()
-                        .putInt("visual_opened", SnapState.openedInBatch)
-                        .putString("visual_status", "Snap #${SnapState.openedInBatch} geöffnet, warte und gehe zurück …")
-                        .apply()
-
-                    handler.postDelayed({
-                        performGlobalAction(GLOBAL_ACTION_BACK)
-                        handler.postDelayed({ scheduleVisualStep(600) }, 900)
-                    }, 2400)
-                }
-            } else if (visualScrollPasses < 5) {
-                visualScrollPasses++
-                scrollChatList {
-                    scheduleVisualStep(850)
-                }
-            } else {
-                prefs.edit().putString("visual_status", "Fertig: keine weiteren Snap-Marker gefunden.").apply()
+            val eligible = candidates.filter {
+                it.first in (w * 0.12f)..(w * 0.28f) &&
+                it.second in (h * 0.15f)..(h * 0.80f) &&
+                batchSeenY.none { y -> kotlin.math.abs(y - it.second) < 45f }
+            }
+            prefs.edit().putBoolean("screenshot_ok", true)
+                .putInt("visual_candidates", candidates.size).apply()
+            val target = eligible.firstOrNull()
+            if (target == null) {
                 SnapState.batchMode = false
-                visualScrollPasses = 0
-                lastOpenedY = -1f
+                batchBusy = false
+                prefs.edit().putString("visual_status",
+                    "Durchlauf beendet: keine weiteren unversuchten Marker im sichtbaren Bereich.")
+                    .putString("diagnostic_report",
+                        "Durchlauf beendet. Tipp-Versuche: ${SnapState.openedInBatch}. Sichtbare Liste abgearbeitet; keine Garantie, dass alle Snaps erkannt wurden.")
+                    .apply()
+                return@takeVisualSnapshot
+            }
+            batchSeenY.add(target.second)
+            prefs.edit().putString("visual_status",
+                "Versuch ${SnapState.openedInBatch + 1}: Tipp bei (${target.first.toInt()},${target.second.toInt()}).").apply()
+            if (!isBatchActive(runId)) {
+                batchBusy = false
+                return@takeVisualSnapshot
+            }
+            tap(target.first, target.second) {
+                if (!isBatchActive(runId)) {
+                    batchBusy = false
+                    return@tap
+                }
+                SnapState.openedInBatch++
+                prefs.edit().putInt("visual_opened", SnapState.openedInBatch)
+                    .putString("visual_status", "Tipp ${SnapState.openedInBatch}/10 abgeschlossen; warte 3 Sekunden.")
+                    .apply()
+                handler.postDelayed({
+                    if (!isBatchActive(runId)) {
+                        batchBusy = false
+                        return@postDelayed
+                    }
+                    performGlobalAction(GLOBAL_ACTION_BACK)
+                    handler.postDelayed({
+                        batchBusy = false
+                        if (isBatchActive(runId)) runManualBatch()
+                        else SnapState.batchMode = false
+                    }, 1700L)
+                }, 3000L)
             }
         }
+    }
+
+    private fun isBatchActive(runId: Int): Boolean {
+        return SnapState.batchMode && !SnapState.batchStopRequested &&
+            SnapState.batchRunId == runId &&
+            System.currentTimeMillis() <= SnapState.batchUntil &&
+            SnapState.openedInBatch < 10
     }
 
     private fun takeVisualSnapshot(done: (Bitmap?) -> Unit) {
