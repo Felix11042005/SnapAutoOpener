@@ -1,21 +1,27 @@
 package de.example.snapauto
 
 import android.accessibilityservice.AccessibilityService
-import android.graphics.Rect
+import android.accessibilityservice.GestureDescription
+import android.graphics.Bitmap
+import android.graphics.Color
+import android.graphics.Path
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.view.Display
 import android.view.accessibility.AccessibilityEvent
-import android.view.accessibility.AccessibilityNodeInfo
+import kotlin.math.max
+import kotlin.math.min
 
 class SnapAccessibilityService : AccessibilityService() {
 
     private val handler = Handler(Looper.getMainLooper())
-    private var lastAttempt = 0L
-    private var batchBusy = false
-    private var emptyPasses = 0
-    private var chatTabAttempted = false
-
     private val prefs by lazy { getSharedPreferences("snapauto_diag", MODE_PRIVATE) }
+
+    private var visualBusy = false
+    private var navigatedToChats = false
+    private var visualScrollPasses = 0
+    private var lastOpenedY = -1f
 
     private val heartbeat = object : Runnable {
         override fun run() {
@@ -23,26 +29,9 @@ class SnapAccessibilityService : AccessibilityService() {
                 .putBoolean("service_connected", true)
                 .putLong("heartbeat_at", System.currentTimeMillis())
                 .apply()
-
-            if (SnapState.diagnosticRequested) {
-                captureDiagnosticTree("heartbeat")
-                if (System.currentTimeMillis() >= SnapState.diagnosticUntil) {
-                    SnapState.diagnosticRequested = false
-                    prefs.edit().putBoolean("diagnostic_running", false).apply()
-                }
-            }
-
             handler.postDelayed(this, 500)
         }
     }
-
-    private val snapKeywords = listOf(
-        "new snap", "neuer snap", "tap to view", "zum ansehen tippen",
-        "received", "empfangen", "snap received", "snap erhalten",
-        "photo", "foto", "video"
-    )
-
-    private val chatKeywords = listOf("chat", "chats")
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -73,251 +62,269 @@ class SnapAccessibilityService : AccessibilityService() {
             .putInt("snap_event_count", prefs.getInt("snap_event_count", 0) + 1)
             .apply()
 
-        if (SnapState.diagnosticRequested) {
-            captureDiagnosticTree("event")
-        }
-
         if (SnapState.batchMode && !SnapState.batchStopRequested) {
-            scheduleBatchStep()
+            scheduleVisualStep(450)
             return
         }
 
-        if (now > SnapState.pendingUntil) return
-        if (now - lastAttempt < 700) return
-
-        lastAttempt = now
-        handler.postDelayed({ tryOpenPendingSnap() }, 500)
+        if (System.currentTimeMillis() <= SnapState.pendingUntil) {
+            SnapState.batchMode = true
+            SnapState.batchStopRequested = false
+            scheduleVisualStep(450)
+        }
     }
 
-    private fun captureDiagnosticTree(trigger: String) {
-        val now = System.currentTimeMillis()
-        val root = rootInActiveWindow
-        val activePackage = root?.packageName?.toString().orEmpty()
-
-        prefs.edit()
-            .putLong("last_capture_at", now)
-            .putString("root_package", activePackage)
-            .putBoolean("root_available", root != null)
-            .apply()
-
-        if (root == null) {
-            val report = buildString {
-                appendLine("SnapAuto Diagnose")
-                appendLine("Accessibility-Service: VERBUNDEN")
-                appendLine("Auslöser: $trigger")
-                appendLine("rootInActiveWindow: NULL")
-                appendLine("Letztes Event-Paket: ${prefs.getString("last_event_package", "-")}")
-                appendLine("Events gesamt: ${prefs.getInt("event_count", 0)}")
-                appendLine("Snapchat-Events: ${prefs.getInt("snap_event_count", 0)}")
-                appendLine()
-                append("Android stellt dem Service aktuell keinen lesbaren UI-Baum bereit.")
-            }
-            saveReport(report, 0)
-            return
-        }
-
-        val queue = ArrayDeque<Pair<AccessibilityNodeInfo, Int>>()
-        queue.add(root to 0)
-
-        val lines = mutableListOf<String>()
-        var total = 0
-        var withText = 0
-        var clickable = 0
-        var scrollable = 0
-
-        while (queue.isNotEmpty() && total < 300) {
-            val (node, depth) = queue.removeFirst()
-            total++
-
-            val text = node.text?.toString().orEmpty()
-            val desc = node.contentDescription?.toString().orEmpty()
-            val viewId = node.viewIdResourceName.orEmpty()
-            val clazz = node.className?.toString().orEmpty()
-
-            if (text.isNotBlank() || desc.isNotBlank()) withText++
-            if (node.isClickable) clickable++
-            if (node.isScrollable) scrollable++
-
-            val bounds = Rect()
-            node.getBoundsInScreen(bounds)
-
-            if (text.isNotBlank() || desc.isNotBlank() || node.isClickable || node.isScrollable) {
-                lines += buildString {
-                    append("#$total d=$depth class=${clazz.takeLast(40)}")
-                    append(" click=${node.isClickable} scroll=${node.isScrollable}")
-                    append(" bounds=${bounds.flattenToString()}")
-                    if (text.isNotBlank()) append(" text=\"${text.take(100).replace("\n", " ")}\"")
-                    if (desc.isNotBlank()) append(" desc=\"${desc.take(100).replace("\n", " ")}\"")
-                    if (viewId.isNotBlank()) append(" id=${viewId.takeLast(80)}")
-                }
-            }
-
-            for (i in 0 until node.childCount) {
-                node.getChild(i)?.let { queue.add(it to (depth + 1)) }
-            }
-        }
-
-        val score = withText * 4 + clickable * 2 + scrollable * 3 + total
-        if (score < SnapState.diagnosticBestScore) return
-        SnapState.diagnosticBestScore = score
-
-        val report = buildString {
-            appendLine("SnapAuto Diagnose")
-            appendLine("Accessibility-Service: VERBUNDEN")
-            appendLine("Auslöser: $trigger")
-            appendLine("Root-Paket: ${activePackage.ifBlank { "-" }}")
-            appendLine("Events gesamt: ${prefs.getInt("event_count", 0)}")
-            appendLine("Snapchat-Events: ${prefs.getInt("snap_event_count", 0)}")
-            appendLine("Gesamtknoten: $total")
-            appendLine("Text/Description: $withText")
-            appendLine("Klickbar: $clickable")
-            appendLine("Scrollbars: $scrollable")
-            appendLine("Snapshot-Score: $score")
-            appendLine()
-            if (lines.isEmpty()) appendLine("Keine verwertbaren UI-Knoten gefunden.")
-            else append(lines.take(140).joinToString("\n"))
-        }
-        saveReport(report, score)
-    }
-
-    private fun saveReport(report: String, score: Int) {
-        SnapState.diagnosticReport = report
-        prefs.edit()
-            .putString("diagnostic_report", report)
-            .putInt("diagnostic_score", score)
-            .putLong("diagnostic_report_at", System.currentTimeMillis())
-            .apply()
-    }
-
-    private fun tryOpenPendingSnap() {
-        val root = rootInActiveWindow ?: return
-        val sender = SnapState.pendingSender
-
-        if (!chatTabAttempted) {
-            chatTabAttempted = true
-            if (clickNodeMatching(root, chatKeywords)) {
-                handler.postDelayed({ tryOpenPendingSnap() }, 900)
-                return
-            }
-        }
-
-        if (sender.isNotBlank() && clickNodeMatching(root, listOf(sender.lowercase()))) {
-            handler.postDelayed({
-                if (clickSnapLikeNode(rootInActiveWindow)) finishPending()
-            }, 900)
-            return
-        }
-
-        if (clickSnapLikeNode(root)) finishPending()
-    }
-
-    private fun scheduleBatchStep(delay: Long = 650) {
-        if (batchBusy) return
-        batchBusy = true
+    private fun scheduleVisualStep(delay: Long) {
+        if (visualBusy) return
+        visualBusy = true
         handler.postDelayed({
-            batchBusy = false
+            visualBusy = false
             if (!SnapState.batchMode || SnapState.batchStopRequested) return@postDelayed
-            batchStep()
+            visualStep()
         }, delay)
     }
 
-    private fun batchStep() {
-        val root = rootInActiveWindow ?: return scheduleBatchStep(900)
-
-        if (!chatTabAttempted) {
-            chatTabAttempted = true
-            if (clickNodeMatching(root, chatKeywords)) {
-                scheduleBatchStep(1000)
-                return
+    private fun visualStep() {
+        if (!navigatedToChats) {
+            navigatedToChats = true
+            prefs.edit().putString("visual_status", "Wische von Kamera zu Chats …").apply()
+            swipeToChats {
+                scheduleVisualStep(1100)
             }
-        }
-
-        if (clickSnapLikeNode(root)) {
-            emptyPasses = 0
-            SnapState.openedInBatch++
-            handler.postDelayed({
-                if (!SnapState.batchMode || SnapState.batchStopRequested) return@postDelayed
-                performGlobalAction(GLOBAL_ACTION_BACK)
-                handler.postDelayed({
-                    chatTabAttempted = true
-                    scheduleBatchStep(350)
-                }, 1000)
-            }, 2400)
             return
         }
 
-        val scrollable = findScrollable(root)
-        if (scrollable != null && emptyPasses < 7 &&
-            scrollable.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)) {
-            emptyPasses++
-            scheduleBatchStep(900)
-        } else {
-            SnapState.batchMode = false
-            emptyPasses = 0
-            chatTabAttempted = false
-        }
-    }
-
-    private fun clickSnapLikeNode(root: AccessibilityNodeInfo?): Boolean {
-        if (root == null) return false
-        return clickNodeOrParent(findBestMatchingNode(root, snapKeywords))
-    }
-
-    private fun clickNodeMatching(root: AccessibilityNodeInfo?, keywords: List<String>): Boolean {
-        if (root == null) return false
-        return clickNodeOrParent(findBestMatchingNode(root, keywords))
-    }
-
-    private fun findBestMatchingNode(root: AccessibilityNodeInfo, keywords: List<String>): AccessibilityNodeInfo? {
-        val queue = ArrayDeque<AccessibilityNodeInfo>()
-        queue.add(root)
-        var best: AccessibilityNodeInfo? = null
-        var bestScore = 0
-
-        while (queue.isNotEmpty()) {
-            val node = queue.removeFirst()
-            val text = node.text?.toString().orEmpty().lowercase()
-            val desc = node.contentDescription?.toString().orEmpty().lowercase()
-            val combined = "$text $desc"
-            var score = 0
-            for (keyword in keywords) if (combined.contains(keyword)) score += if (combined == keyword) 5 else 3
-            if (node.isClickable) score += 1
-            val bounds = Rect()
-            node.getBoundsInScreen(bounds)
-            if (bounds.width() > 40 && bounds.height() > 40) score += 1
-            if (score > bestScore) {
-                bestScore = score
-                best = node
+        takeVisualSnapshot { bitmap ->
+            if (bitmap == null) {
+                prefs.edit()
+                    .putString("visual_status", "Screenshot konnte nicht aufgenommen werden.")
+                    .putBoolean("screenshot_ok", false)
+                    .apply()
+                SnapState.batchMode = false
+                return@takeVisualSnapshot
             }
-            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+
+            prefs.edit()
+                .putBoolean("screenshot_ok", true)
+                .putInt("screenshot_width", bitmap.width)
+                .putInt("screenshot_height", bitmap.height)
+                .apply()
+
+            val candidates = findSnapMarkers(bitmap)
+            bitmap.recycle()
+
+            prefs.edit()
+                .putInt("visual_candidates", candidates.size)
+                .putString(
+                    "visual_status",
+                    if (candidates.isEmpty()) "Keine roten/lila Snap-Marker gefunden."
+                    else "${candidates.size} möglicher Snap-Marker gefunden."
+                )
+                .apply()
+
+            if (candidates.isNotEmpty()) {
+                val candidate = candidates
+                    .filter { lastOpenedY < 0f || kotlin.math.abs(it.second - lastOpenedY) > 30f }
+                    .minByOrNull { it.second }
+                    ?: candidates.minByOrNull { it.second }!!
+
+                lastOpenedY = candidate.second
+                tap(candidate.first, candidate.second) {
+                    SnapState.openedInBatch++
+                    prefs.edit()
+                        .putInt("visual_opened", SnapState.openedInBatch)
+                        .putString("visual_status", "Snap #${SnapState.openedInBatch} geöffnet, warte und gehe zurück …")
+                        .apply()
+
+                    handler.postDelayed({
+                        performGlobalAction(GLOBAL_ACTION_BACK)
+                        handler.postDelayed({ scheduleVisualStep(600) }, 900)
+                    }, 2400)
+                }
+            } else if (visualScrollPasses < 5) {
+                visualScrollPasses++
+                scrollChatList {
+                    scheduleVisualStep(850)
+                }
+            } else {
+                prefs.edit().putString("visual_status", "Fertig: keine weiteren Snap-Marker gefunden.").apply()
+                SnapState.batchMode = false
+                visualScrollPasses = 0
+                lastOpenedY = -1f
+            }
         }
-        return if (bestScore >= 3) best else null
     }
 
-    private fun clickNodeOrParent(node: AccessibilityNodeInfo?): Boolean {
-        var target = node
-        repeat(8) {
-            if (target?.isClickable == true &&
-                target?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true) return true
-            target = target?.parent
+    private fun takeVisualSnapshot(done: (Bitmap?) -> Unit) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            prefs.edit().putString("visual_status", "Screenshot benötigt Android 11 oder neuer.").apply()
+            done(null)
+            return
         }
-        return false
+
+        try {
+            takeScreenshot(
+                Display.DEFAULT_DISPLAY,
+                mainExecutor,
+                object : TakeScreenshotCallback {
+                    override fun onSuccess(screenshot: ScreenshotResult) {
+                        val buffer = screenshot.hardwareBuffer
+                        val bitmap = Bitmap.wrapHardwareBuffer(buffer, screenshot.colorSpace)
+                            ?.copy(Bitmap.Config.ARGB_8888, false)
+                        buffer.close()
+                        done(bitmap)
+                    }
+
+                    override fun onFailure(errorCode: Int) {
+                        prefs.edit()
+                            .putInt("screenshot_error", errorCode)
+                            .putString("visual_status", "Screenshot-Fehlercode: $errorCode")
+                            .apply()
+                        done(null)
+                    }
+                }
+            )
+        } catch (t: Throwable) {
+            prefs.edit()
+                .putString("visual_status", "Screenshot-Ausnahme: ${t.javaClass.simpleName}")
+                .apply()
+            done(null)
+        }
     }
 
-    private fun findScrollable(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
-        if (node == null) return null
-        if (node.isScrollable) return node
-        for (i in 0 until node.childCount) {
-            val found = findScrollable(node.getChild(i))
-            if (found != null) return found
+    private fun findSnapMarkers(bitmap: Bitmap): List<Pair<Float, Float>> {
+        val w = bitmap.width
+        val h = bitmap.height
+
+        val xStart = (w * 0.10f).toInt()
+        val xEnd = (w * 0.58f).toInt()
+        val yStart = (h * 0.12f).toInt()
+        val yEnd = (h * 0.88f).toInt()
+        val step = max(2, min(w, h) / 500)
+
+        val rowHits = mutableListOf<Pair<Int, MutableList<Int>>>()
+
+        var y = yStart
+        while (y < yEnd) {
+            val xs = mutableListOf<Int>()
+            var x = xStart
+            while (x < xEnd) {
+                if (isSnapColor(bitmap.getPixel(x, y))) xs += x
+                x += step
+            }
+            if (xs.size >= 4) rowHits += y to xs
+            y += step
         }
-        return null
+
+        if (rowHits.isEmpty()) return emptyList()
+
+        val groups = mutableListOf<MutableList<Pair<Int, MutableList<Int>>>>()
+        for (row in rowHits) {
+            if (groups.isEmpty() || row.first - groups.last().last().first <= step * 3) {
+                if (groups.isEmpty()) groups += mutableListOf()
+                groups.last() += row
+            } else {
+                groups += mutableListOf(row)
+            }
+        }
+
+        val candidates = mutableListOf<Pair<Float, Float>>()
+        for (group in groups) {
+            val ys = group.map { it.first }
+            val allXs = group.flatMap { it.second }
+            val height = ys.maxOrNull()!! - ys.minOrNull()!! + step
+            val width = allXs.maxOrNull()!! - allXs.minOrNull()!! + step
+            val pixels = allXs.size
+
+            if (height in 8..140 && width in 5..220 && pixels >= 12) {
+                val cx = allXs.average().toFloat()
+                val cy = ys.average().toFloat()
+                candidates += cx to cy
+            }
+        }
+
+        return candidates
+            .sortedBy { it.second }
+            .fold(mutableListOf()) { acc, p ->
+                if (acc.none { kotlin.math.abs(it.second - p.second) < 35f }) acc += p
+                acc
+            }
     }
 
-    private fun finishPending() {
-        SnapState.pendingUntil = 0
-        SnapState.pendingSender = ""
-        chatTabAttempted = false
+    private fun isSnapColor(pixel: Int): Boolean {
+        val r = Color.red(pixel)
+        val g = Color.green(pixel)
+        val b = Color.blue(pixel)
+
+        val maxC = max(r, max(g, b))
+        val minC = min(r, min(g, b))
+        val saturation = if (maxC == 0) 0f else (maxC - minC).toFloat() / maxC.toFloat()
+
+        val red = r > 180 && g < 120 && b < 140 && saturation > 0.45f
+        val purple = r > 100 && b > 120 && b > g * 1.15f && saturation > 0.35f
+
+        return red || purple
+    }
+
+    private fun tap(x: Float, y: Float, done: () -> Unit) {
+        val path = Path().apply { moveTo(x, y) }
+        val gesture = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0, 80))
+            .build()
+
+        dispatchGesture(
+            gesture,
+            object : GestureResultCallback() {
+                override fun onCompleted(gestureDescription: GestureDescription?) {
+                    done()
+                }
+
+                override fun onCancelled(gestureDescription: GestureDescription?) {
+                    prefs.edit().putString("visual_status", "Tap-Geste wurde abgebrochen.").apply()
+                    SnapState.batchMode = false
+                }
+            },
+            handler
+        )
+    }
+
+    private fun swipeToChats(done: () -> Unit) {
+        val dm = resources.displayMetrics
+        val w = dm.widthPixels.toFloat()
+        val h = dm.heightPixels.toFloat()
+        val path = Path().apply {
+            moveTo(w * 0.18f, h * 0.55f)
+            lineTo(w * 0.82f, h * 0.55f)
+        }
+        dispatchPath(path, 320, done)
+    }
+
+    private fun scrollChatList(done: () -> Unit) {
+        val dm = resources.displayMetrics
+        val w = dm.widthPixels.toFloat()
+        val h = dm.heightPixels.toFloat()
+        val path = Path().apply {
+            moveTo(w * 0.55f, h * 0.76f)
+            lineTo(w * 0.55f, h * 0.32f)
+        }
+        dispatchPath(path, 360, done)
+    }
+
+    private fun dispatchPath(path: Path, duration: Long, done: () -> Unit) {
+        val gesture = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0, duration))
+            .build()
+        dispatchGesture(
+            gesture,
+            object : GestureResultCallback() {
+                override fun onCompleted(gestureDescription: GestureDescription?) = done()
+                override fun onCancelled(gestureDescription: GestureDescription?) {
+                    prefs.edit().putString("visual_status", "Wischgeste wurde abgebrochen.").apply()
+                    SnapState.batchMode = false
+                }
+            },
+            handler
+        )
     }
 
     override fun onInterrupt() = Unit
