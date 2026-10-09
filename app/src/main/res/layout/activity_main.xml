@@ -11,7 +11,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Snap Auto Opener V3.3 – Manueller Durchlauf"
+            android:text="Snap Auto Opener V3.4 – Schnellmodus"
             android:textStyle="bold"
             android:textSize="28sp"
             android:layout_marginBottom="12dp" />
@@ -19,7 +19,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Nur auf Ihren Startbefehl: bis zu 10 Tipp-Versuche im sichtbaren Chatbereich."
+            android:text="Manueller Start: Ungelesen-Filter, ausgefüllte Snap-Symbole und bis zu 8 Weiter-Tipps je Chat."
             android:textSize="16sp"
             android:layout_marginBottom="18dp" />
 
@@ -98,7 +98,7 @@
             android:id="@+id/openExisting"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Snaps im Arbeitsprofil öffnen (START)"
+            android:text="SCHNELLMODUS STARTEN"
             android:layout_marginTop="24dp" />
 
         <Button
@@ -111,7 +111,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="V3.3 speichert keine Screenshots. Die Farberkennung ist experimentell; falsche Treffer sind möglich."
+            android:text="V3.4 ist experimentell. Prüfen Sie die ersten Durchläufe. Screenshots werden nicht gespeichert."
             android:layout_marginTop="24dp" />
     </LinearLayout>
 </ScrollView>
