@@ -1,0 +1,28 @@
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="22dp" />
+            <solid android:color="#FFFC00" />
+        </shape>
+    </item>
+    <item android:left="14dp" android:top="12dp" android:right="14dp" android:bottom="12dp">
+        <vector
+            android:width="72dp"
+            android:height="72dp"
+            android:viewportWidth="100"
+            android:viewportHeight="100">
+            <path
+                android:fillColor="#111111"
+                android:pathData="M50,9 C34,9 24,20 24,36 L24,51 C20,57 15,61 9,63 C13,69 18,72 24,73 C21,78 18,82 16,87 C25,90 32,89 38,86 C42,91 46,93 50,93 C54,93 58,91 62,86 C68,89 75,90 84,87 C82,82 79,78 76,73 C82,72 87,69 91,63 C85,61 80,57 76,51 L76,36 C76,20 66,9 50,9 Z"/>
+            <path
+                android:fillColor="#FFFFFF"
+                android:pathData="M50,14 C37,14 29,23 29,37 L29,53 C25,59 21,63 16,65 C20,68 25,69 30,69 C28,75 25,80 23,84 C30,85 35,83 40,80 C43,86 46,88 50,88 C54,88 57,86 60,80 C65,83 70,85 77,84 C75,80 72,75 70,69 C75,69 80,68 84,65 C79,63 75,59 71,53 L71,37 C71,23 63,14 50,14 Z"/>
+            <path
+                android:fillColor="#111111"
+                android:pathData="M67,67 L72,64 L77,67 L77,73 L82,76 L79,82 L73,82 L70,87 L64,84 L64,78 L59,75 L62,69 Z"/>
+            <path
+                android:fillColor="#FFFFFF"
+                android:pathData="M70,70 A6,6 0,1 1,69.9 70 Z"/>
+        </vector>
+    </item>
+</layer-list>
