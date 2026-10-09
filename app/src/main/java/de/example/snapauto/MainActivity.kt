@@ -2,16 +2,28 @@ package de.example.snapauto
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.widget.Button
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
     private val snapchatPackage = "com.snapchat.android"
+    private val uiHandler = Handler(Looper.getMainLooper())
+    private val refreshRunnable = object : Runnable {
+        override fun run() {
+            updateDiagnosticReport()
+            uiHandler.postDelayed(this, 500)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,112 +51,119 @@ class MainActivity : AppCompatActivity() {
 
         findViewById<Button>(R.id.runDiagnostic).setOnClickListener {
             val launchIntent = packageManager.getLaunchIntentForPackage(snapchatPackage)
-
             if (launchIntent == null) {
-                Toast.makeText(
-                    this,
-                    "Snapchat ist in diesem Android-Bereich nicht sichtbar.",
-                    Toast.LENGTH_LONG
-                ).show()
+                Toast.makeText(this, "Snapchat ist in diesem Android-Profil nicht sichtbar.", Toast.LENGTH_LONG).show()
                 return@setOnClickListener
             }
 
+            val diagPrefs = getSharedPreferences("snapauto_diag", MODE_PRIVATE)
+            diagPrefs.edit()
+                .putBoolean("diagnostic_running", true)
+                .putString("diagnostic_report", "Diagnose gestartet. Öffnen Sie in Snapchat MANUELL die Chatliste und lassen Sie sie einige Sekunden sichtbar.")
+                .putInt("diagnostic_score", -1)
+                .putInt("event_count", 0)
+                .putInt("snap_event_count", 0)
+                .remove("last_event_package")
+                .remove("last_event_type")
+                .apply()
+
             SnapState.batchMode = false
             SnapState.batchStopRequested = true
-            SnapState.diagnosticReport =
-                "Diagnose läuft 15 Sekunden. Wechseln Sie in Snapchat jetzt MANUELL auf Chats und lassen Sie die Chatliste kurz sichtbar."
+            SnapState.diagnosticReport = "Diagnose gestartet. Öffnen Sie in Snapchat MANUELL die Chatliste und lassen Sie sie einige Sekunden sichtbar."
             SnapState.diagnosticBestScore = -1
-            SnapState.diagnosticUntil = System.currentTimeMillis() + 15_000
+            SnapState.diagnosticUntil = System.currentTimeMillis() + 20_000
             SnapState.diagnosticRequested = true
 
             launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             startActivity(launchIntent)
-
-            Toast.makeText(
-                this,
-                "Diagnose läuft 15 Sekunden. Öffnen Sie jetzt MANUELL den Chat-Tab, lassen Sie die Chatliste kurz stehen und kehren Sie danach zurück.",
-                Toast.LENGTH_LONG
-            ).show()
+            Toast.makeText(this, "20-Sekunden-Diagnose läuft. Jetzt in Snapchat den Chat-Tab öffnen.", Toast.LENGTH_LONG).show()
         }
 
         findViewById<Button>(R.id.openExisting).setOnClickListener {
             val launchIntent = packageManager.getLaunchIntentForPackage(snapchatPackage)
-
             if (launchIntent == null) {
                 SnapState.batchMode = false
-                Toast.makeText(
-                    this,
-                    "Snapchat ist in diesem Android-Bereich nicht sichtbar. Installieren Sie SnapAutoOpener und Snapchat im selben vertraulichen Bereich.",
-                    Toast.LENGTH_LONG
-                ).show()
-                updateProfileStatus(showToast = false)
+                Toast.makeText(this, "Snapchat ist in diesem Android-Profil nicht sichtbar.", Toast.LENGTH_LONG).show()
+                updateProfileStatus(false)
                 return@setOnClickListener
             }
 
             SnapState.batchMode = true
             SnapState.batchStopRequested = false
             SnapState.openedInBatch = 0
-
             launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             startActivity(launchIntent)
-
-            Toast.makeText(
-                this,
-                "Snapchat aus demselben Android-Bereich wurde geöffnet. Der vertrauliche Bereich muss entsperrt bleiben.",
-                Toast.LENGTH_LONG
-            ).show()
         }
 
         findViewById<Button>(R.id.stopBatch).setOnClickListener {
             SnapState.batchStopRequested = true
             SnapState.batchMode = false
-            Toast.makeText(
-                this,
-                "Durchlauf gestoppt. Geöffnet: ${SnapState.openedInBatch}",
-                Toast.LENGTH_SHORT
-            ).show()
+            Toast.makeText(this, "Durchlauf gestoppt. Geöffnet: ${SnapState.openedInBatch}", Toast.LENGTH_SHORT).show()
         }
 
-        updateProfileStatus(showToast = false)
+        updateProfileStatus(false)
         updateDiagnosticReport()
     }
 
     override fun onResume() {
         super.onResume()
-        updateProfileStatus(showToast = false)
-        updateDiagnosticReport()
+        updateProfileStatus(false)
+        uiHandler.removeCallbacks(refreshRunnable)
+        uiHandler.post(refreshRunnable)
+    }
+
+    override fun onPause() {
+        uiHandler.removeCallbacks(refreshRunnable)
+        super.onPause()
     }
 
     private fun updateDiagnosticReport() {
-        findViewById<TextView>(R.id.diagnosticReport).text =
-            SnapState.diagnosticReport
+        val prefs = getSharedPreferences("snapauto_diag", MODE_PRIVATE)
+        val connected = prefs.getBoolean("service_connected", false)
+        val heartbeat = prefs.getLong("heartbeat_at", 0L)
+        val alive = connected && System.currentTimeMillis() - heartbeat < 2500
+        val lastEvent = prefs.getLong("last_event_at", 0L)
+        val lastSnapEvent = prefs.getLong("last_snap_event_at", 0L)
+        val rootAvailable = prefs.getBoolean("root_available", false)
+        val rootPackage = prefs.getString("root_package", "-") ?: "-"
+        val events = prefs.getInt("event_count", 0)
+        val snapEvents = prefs.getInt("snap_event_count", 0)
+        val report = prefs.getString("diagnostic_report", SnapState.diagnosticReport)
+            ?: SnapState.diagnosticReport
+
+        fun time(value: Long): String {
+            if (value <= 0) return "-"
+            return SimpleDateFormat("HH:mm:ss", Locale.GERMANY).format(Date(value))
+        }
+
+        findViewById<TextView>(R.id.serviceStatus).text = buildString {
+            appendLine("Service verbunden: ${if (alive) "JA" else "NEIN"}")
+            appendLine("Letztes Event: ${time(lastEvent)}")
+            appendLine("Letztes Snapchat-Event: ${time(lastSnapEvent)}")
+            appendLine("Events / Snapchat: $events / $snapEvents")
+            appendLine("rootInActiveWindow: ${if (rootAvailable) "JA" else "NEIN"}")
+            append("Root-Paket: $rootPackage")
+        }
+
+        findViewById<TextView>(R.id.diagnosticReport).text = report
     }
 
     private fun updateProfileStatus(showToast: Boolean) {
         val status = findViewById<TextView>(R.id.profileStatus)
-        val snapchatAvailable =
-            packageManager.getLaunchIntentForPackage(snapchatPackage) != null
+        val snapchatAvailable = packageManager.getLaunchIntentForPackage(snapchatPackage) != null
 
-        if (snapchatAvailable) {
-            status.text =
-                "✓ Snapchat ist in diesem Android-Bereich verfügbar. Starten Sie diese App aus dem vertraulichen Bereich, damit die private Snapchat-Kopie verwendet wird."
-            if (showToast) {
-                Toast.makeText(
-                    this,
-                    "Snapchat im selben Android-Bereich gefunden.",
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
+        status.text = if (snapchatAvailable) {
+            "✓ Snapchat ist in diesem Android-Profil verfügbar."
         } else {
-            status.text =
-                "✗ Snapchat ist in diesem Android-Bereich nicht verfügbar. Öffnen bzw. installieren Sie SnapAutoOpener im selben vertraulichen Bereich wie Snapchat."
-            if (showToast) {
-                Toast.makeText(
-                    this,
-                    "Keine Snapchat-Instanz im selben Android-Bereich gefunden.",
-                    Toast.LENGTH_LONG
-                ).show()
-            }
+            "✗ Snapchat ist in diesem Android-Profil nicht verfügbar."
+        }
+
+        if (showToast) {
+            Toast.makeText(
+                this,
+                if (snapchatAvailable) "Snapchat im selben Android-Profil gefunden." else "Keine Snapchat-Instanz im selben Android-Profil gefunden.",
+                Toast.LENGTH_SHORT
+            ).show()
         }
     }
 }
