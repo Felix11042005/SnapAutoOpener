@@ -267,10 +267,10 @@ class SnapAccessibilityService : AccessibilityService() {
         val groups = mutableListOf<MutableList<Pair<Int, MutableList<Int>>>>()
         for (row in rowHits) {
             if (groups.isEmpty() || row.first - groups.last().last().first <= step * 3) {
-                if (groups.isEmpty()) groups += mutableListOf()
-                groups.last() += row
+                if (groups.isEmpty()) groups.add(mutableListOf())
+                groups.last().add(row)
             } else {
-                groups += mutableListOf(row)
+                groups.add(mutableListOf(row))
             }
         }
 
