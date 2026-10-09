@@ -11,7 +11,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Snap Auto Opener V3 – Visual"
+            android:text="Snap Auto Opener V3.2 – Einzeltest"
             android:textStyle="bold"
             android:textSize="28sp"
             android:layout_marginBottom="12dp" />
@@ -98,7 +98,7 @@
             android:id="@+id/openExisting"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="V3: vorhandene Snaps visuell öffnen"
+            android:text="V3.2: EINEN Tipp im Arbeitsprofil testen"
             android:layout_marginTop="24dp" />
 
         <Button
