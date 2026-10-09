@@ -14,38 +14,67 @@ class SnapAccessibilityService : AccessibilityService() {
     private var batchBusy = false
     private var emptyPasses = 0
     private var chatTabAttempted = false
-    private var diagnosticFinalizeScheduled = false
+
+    private val prefs by lazy { getSharedPreferences("snapauto_diag", MODE_PRIVATE) }
+
+    private val heartbeat = object : Runnable {
+        override fun run() {
+            prefs.edit()
+                .putBoolean("service_connected", true)
+                .putLong("heartbeat_at", System.currentTimeMillis())
+                .apply()
+
+            if (SnapState.diagnosticRequested) {
+                captureDiagnosticTree("heartbeat")
+                if (System.currentTimeMillis() >= SnapState.diagnosticUntil) {
+                    SnapState.diagnosticRequested = false
+                    prefs.edit().putBoolean("diagnostic_running", false).apply()
+                }
+            }
+
+            handler.postDelayed(this, 500)
+        }
+    }
 
     private val snapKeywords = listOf(
-        "new snap",
-        "neuer snap",
-        "tap to view",
-        "zum ansehen tippen",
-        "received",
-        "empfangen",
-        "snap received",
-        "snap erhalten",
-        "photo",
-        "foto",
-        "video"
+        "new snap", "neuer snap", "tap to view", "zum ansehen tippen",
+        "received", "empfangen", "snap received", "snap erhalten",
+        "photo", "foto", "video"
     )
 
     private val chatKeywords = listOf("chat", "chats")
 
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        prefs.edit()
+            .putBoolean("service_connected", true)
+            .putLong("service_connected_at", System.currentTimeMillis())
+            .putLong("heartbeat_at", System.currentTimeMillis())
+            .apply()
+        handler.removeCallbacks(heartbeat)
+        handler.post(heartbeat)
+    }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event?.packageName?.toString() != "com.snapchat.android") return
+        val now = System.currentTimeMillis()
+        val pkg = event?.packageName?.toString().orEmpty()
+
+        prefs.edit()
+            .putLong("last_event_at", now)
+            .putString("last_event_package", pkg)
+            .putString("last_event_type", event?.eventType?.toString().orEmpty())
+            .putInt("event_count", prefs.getInt("event_count", 0) + 1)
+            .apply()
+
+        if (pkg != "com.snapchat.android") return
+
+        prefs.edit()
+            .putLong("last_snap_event_at", now)
+            .putInt("snap_event_count", prefs.getInt("snap_event_count", 0) + 1)
+            .apply()
 
         if (SnapState.diagnosticRequested) {
-            captureDiagnosticTree()
-
-            if (!diagnosticFinalizeScheduled) {
-                diagnosticFinalizeScheduled = true
-                val remaining = (SnapState.diagnosticUntil - System.currentTimeMillis()).coerceAtLeast(500L)
-                handler.postDelayed({
-                    SnapState.diagnosticRequested = false
-                    diagnosticFinalizeScheduled = false
-                }, remaining)
-            }
+            captureDiagnosticTree("event")
         }
 
         if (SnapState.batchMode && !SnapState.batchStopRequested) {
@@ -53,20 +82,37 @@ class SnapAccessibilityService : AccessibilityService() {
             return
         }
 
-        if (System.currentTimeMillis() > SnapState.pendingUntil) return
-        if (System.currentTimeMillis() - lastAttempt < 700) return
+        if (now > SnapState.pendingUntil) return
+        if (now - lastAttempt < 700) return
 
-        lastAttempt = System.currentTimeMillis()
+        lastAttempt = now
         handler.postDelayed({ tryOpenPendingSnap() }, 500)
     }
 
-    private fun captureDiagnosticTree() {
+    private fun captureDiagnosticTree(trigger: String) {
+        val now = System.currentTimeMillis()
         val root = rootInActiveWindow
+        val activePackage = root?.packageName?.toString().orEmpty()
+
+        prefs.edit()
+            .putLong("last_capture_at", now)
+            .putString("root_package", activePackage)
+            .putBoolean("root_available", root != null)
+            .apply()
 
         if (root == null) {
-            SnapState.diagnosticReport =
-                "Snapchat wurde erkannt, aber rootInActiveWindow ist NULL. " +
-                "Android/Snapchat stellt dem Accessibility-Service aktuell keinen lesbaren UI-Baum bereit."
+            val report = buildString {
+                appendLine("SnapAuto Diagnose")
+                appendLine("Accessibility-Service: VERBUNDEN")
+                appendLine("Auslöser: $trigger")
+                appendLine("rootInActiveWindow: NULL")
+                appendLine("Letztes Event-Paket: ${prefs.getString("last_event_package", "-")}")
+                appendLine("Events gesamt: ${prefs.getInt("event_count", 0)}")
+                appendLine("Snapchat-Events: ${prefs.getInt("snap_event_count", 0)}")
+                appendLine()
+                append("Android stellt dem Service aktuell keinen lesbaren UI-Baum bereit.")
+            }
+            saveReport(report, 0)
             return
         }
 
@@ -79,7 +125,7 @@ class SnapAccessibilityService : AccessibilityService() {
         var clickable = 0
         var scrollable = 0
 
-        while (queue.isNotEmpty() && total < 250) {
+        while (queue.isNotEmpty() && total < 300) {
             val (node, depth) = queue.removeFirst()
             total++
 
@@ -95,42 +141,14 @@ class SnapAccessibilityService : AccessibilityService() {
             val bounds = Rect()
             node.getBoundsInScreen(bounds)
 
-            if (
-                text.isNotBlank() ||
-                desc.isNotBlank() ||
-                node.isClickable ||
-                node.isScrollable
-            ) {
+            if (text.isNotBlank() || desc.isNotBlank() || node.isClickable || node.isScrollable) {
                 lines += buildString {
-                    append("#")
-                    append(total)
-                    append(" d=")
-                    append(depth)
-                    append(" class=")
-                    append(clazz.takeLast(40))
-                    append(" click=")
-                    append(node.isClickable)
-                    append(" scroll=")
-                    append(node.isScrollable)
-                    append(" bounds=")
-                    append(bounds.flattenToString())
-
-                    if (text.isNotBlank()) {
-                        append(" text=\"")
-                        append(text.take(80).replace("\n", " "))
-                        append("\"")
-                    }
-
-                    if (desc.isNotBlank()) {
-                        append(" desc=\"")
-                        append(desc.take(80).replace("\n", " "))
-                        append("\"")
-                    }
-
-                    if (viewId.isNotBlank()) {
-                        append(" id=")
-                        append(viewId.takeLast(60))
-                    }
+                    append("#$total d=$depth class=${clazz.takeLast(40)}")
+                    append(" click=${node.isClickable} scroll=${node.isScrollable}")
+                    append(" bounds=${bounds.flattenToString()}")
+                    if (text.isNotBlank()) append(" text=\"${text.take(100).replace("\n", " ")}\"")
+                    if (desc.isNotBlank()) append(" desc=\"${desc.take(100).replace("\n", " ")}\"")
+                    if (viewId.isNotBlank()) append(" id=${viewId.takeLast(80)}")
                 }
             }
 
@@ -140,24 +158,35 @@ class SnapAccessibilityService : AccessibilityService() {
         }
 
         val score = withText * 4 + clickable * 2 + scrollable * 3 + total
+        if (score < SnapState.diagnosticBestScore) return
+        SnapState.diagnosticBestScore = score
 
-        if (score >= SnapState.diagnosticBestScore) {
-            SnapState.diagnosticBestScore = score
-            SnapState.diagnosticReport = buildString {
-                appendLine("Snapchat Accessibility-Diagnose (bester Snapshot)")
-                appendLine("Gesamtknoten: $total")
-                appendLine("Knoten mit Text/Description: $withText")
-                appendLine("Klickbare Knoten: $clickable")
-                appendLine("Scrollbare Knoten: $scrollable")
-                appendLine("Snapshot-Score: $score")
-                appendLine()
-                if (lines.isEmpty()) {
-                    appendLine("Keine verwertbaren UI-Knoten gefunden.")
-                } else {
-                    append(lines.take(120).joinToString("\n"))
-                }
-            }
+        val report = buildString {
+            appendLine("SnapAuto Diagnose")
+            appendLine("Accessibility-Service: VERBUNDEN")
+            appendLine("Auslöser: $trigger")
+            appendLine("Root-Paket: ${activePackage.ifBlank { "-" }}")
+            appendLine("Events gesamt: ${prefs.getInt("event_count", 0)}")
+            appendLine("Snapchat-Events: ${prefs.getInt("snap_event_count", 0)}")
+            appendLine("Gesamtknoten: $total")
+            appendLine("Text/Description: $withText")
+            appendLine("Klickbar: $clickable")
+            appendLine("Scrollbars: $scrollable")
+            appendLine("Snapshot-Score: $score")
+            appendLine()
+            if (lines.isEmpty()) appendLine("Keine verwertbaren UI-Knoten gefunden.")
+            else append(lines.take(140).joinToString("\n"))
         }
+        saveReport(report, score)
+    }
+
+    private fun saveReport(report: String, score: Int) {
+        SnapState.diagnosticReport = report
+        prefs.edit()
+            .putString("diagnostic_report", report)
+            .putInt("diagnostic_score", score)
+            .putLong("diagnostic_report_at", System.currentTimeMillis())
+            .apply()
     }
 
     private fun tryOpenPendingSnap() {
@@ -184,7 +213,6 @@ class SnapAccessibilityService : AccessibilityService() {
 
     private fun scheduleBatchStep(delay: Long = 650) {
         if (batchBusy) return
-
         batchBusy = true
         handler.postDelayed({
             batchBusy = false
@@ -207,12 +235,9 @@ class SnapAccessibilityService : AccessibilityService() {
         if (clickSnapLikeNode(root)) {
             emptyPasses = 0
             SnapState.openedInBatch++
-
             handler.postDelayed({
                 if (!SnapState.batchMode || SnapState.batchStopRequested) return@postDelayed
-
                 performGlobalAction(GLOBAL_ACTION_BACK)
-
                 handler.postDelayed({
                     chatTabAttempted = true
                     scheduleBatchStep(350)
@@ -222,11 +247,8 @@ class SnapAccessibilityService : AccessibilityService() {
         }
 
         val scrollable = findScrollable(root)
-        if (
-            scrollable != null &&
-            emptyPasses < 7 &&
-            scrollable.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
-        ) {
+        if (scrollable != null && emptyPasses < 7 &&
+            scrollable.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)) {
             emptyPasses++
             scheduleBatchStep(900)
         } else {
@@ -238,88 +260,57 @@ class SnapAccessibilityService : AccessibilityService() {
 
     private fun clickSnapLikeNode(root: AccessibilityNodeInfo?): Boolean {
         if (root == null) return false
-        val candidate = findBestMatchingNode(root, snapKeywords)
-        return clickNodeOrParent(candidate)
+        return clickNodeOrParent(findBestMatchingNode(root, snapKeywords))
     }
 
-    private fun clickNodeMatching(
-        root: AccessibilityNodeInfo?,
-        keywords: List<String>
-    ): Boolean {
+    private fun clickNodeMatching(root: AccessibilityNodeInfo?, keywords: List<String>): Boolean {
         if (root == null) return false
-        val candidate = findBestMatchingNode(root, keywords)
-        return clickNodeOrParent(candidate)
+        return clickNodeOrParent(findBestMatchingNode(root, keywords))
     }
 
-    private fun findBestMatchingNode(
-        root: AccessibilityNodeInfo,
-        keywords: List<String>
-    ): AccessibilityNodeInfo? {
+    private fun findBestMatchingNode(root: AccessibilityNodeInfo, keywords: List<String>): AccessibilityNodeInfo? {
         val queue = ArrayDeque<AccessibilityNodeInfo>()
         queue.add(root)
-
         var best: AccessibilityNodeInfo? = null
         var bestScore = 0
 
         while (queue.isNotEmpty()) {
             val node = queue.removeFirst()
-
             val text = node.text?.toString().orEmpty().lowercase()
             val desc = node.contentDescription?.toString().orEmpty().lowercase()
             val combined = "$text $desc"
-
             var score = 0
-
-            for (keyword in keywords) {
-                if (combined.contains(keyword)) {
-                    score += if (combined == keyword) 5 else 3
-                }
-            }
-
+            for (keyword in keywords) if (combined.contains(keyword)) score += if (combined == keyword) 5 else 3
             if (node.isClickable) score += 1
-
             val bounds = Rect()
             node.getBoundsInScreen(bounds)
             if (bounds.width() > 40 && bounds.height() > 40) score += 1
-
             if (score > bestScore) {
                 bestScore = score
                 best = node
             }
-
-            for (i in 0 until node.childCount) {
-                node.getChild(i)?.let { queue.add(it) }
-            }
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
         }
-
         return if (bestScore >= 3) best else null
     }
 
     private fun clickNodeOrParent(node: AccessibilityNodeInfo?): Boolean {
         var target = node
-
         repeat(8) {
-            if (
-                target?.isClickable == true &&
-                target?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true
-            ) {
-                return true
-            }
+            if (target?.isClickable == true &&
+                target?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true) return true
             target = target?.parent
         }
-
         return false
     }
 
     private fun findScrollable(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
         if (node == null) return null
         if (node.isScrollable) return node
-
         for (i in 0 until node.childCount) {
             val found = findScrollable(node.getChild(i))
             if (found != null) return found
         }
-
         return null
     }
 
@@ -330,4 +321,10 @@ class SnapAccessibilityService : AccessibilityService() {
     }
 
     override fun onInterrupt() = Unit
+
+    override fun onDestroy() {
+        handler.removeCallbacks(heartbeat)
+        prefs.edit().putBoolean("service_connected", false).apply()
+        super.onDestroy()
+    }
 }
