@@ -143,6 +143,7 @@ class SnapAccessibilityService : AccessibilityService() {
     }
 
     private fun runVisualDiagnostic() {
+        if (System.currentTimeMillis() - lastScreenshotAt < 1200L) return
         if (visualBusy) return
         visualBusy = true
         takeVisualSnapshot { bitmap ->
