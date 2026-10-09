@@ -11,7 +11,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Snap Auto Opener V2.4 Diagnose"
+            android:text="Snap Auto Opener V3 – Visual"
             android:textStyle="bold"
             android:textSize="28sp"
             android:layout_marginBottom="12dp" />
@@ -19,7 +19,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Diagnose-Build für Haupt-, Arbeits- und vertrauliche Profile."
+            android:text="V3 arbeitet ohne Snapchat-UI-Baum: Screenshot-Erkennung + Gesten."
             android:textSize="16sp"
             android:layout_marginBottom="18dp" />
 
@@ -66,7 +66,7 @@
             android:id="@+id/runDiagnostic"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="3. 20-Sekunden-Diagnose starten"
+            android:text="Diagnose starten"
             android:layout_marginTop="18dp" />
 
         <Button
@@ -98,7 +98,7 @@
             android:id="@+id/openExisting"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Alle vorhandenen Snaps öffnen"
+            android:text="V3: vorhandene Snaps visuell öffnen"
             android:layout_marginTop="24dp" />
 
         <Button
@@ -111,7 +111,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Die Diagnose speichert nur Accessibility-Metadaten lokal auf dem Gerät. Keine Screenshots und kein Upload."
+            android:text="V3 verarbeitet Screenshots ausschließlich lokal im Arbeitsspeicher und speichert sie nicht."
             android:layout_marginTop="24dp" />
     </LinearLayout>
 </ScrollView>
