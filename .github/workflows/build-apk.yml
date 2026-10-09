@@ -63,3 +63,5 @@ jobs:
           name: SnapAutoOpener-apk
           path: /tmp/SnapAutoOpener.apk
           if-no-files-found: error
+
+# Stable signing trigger
