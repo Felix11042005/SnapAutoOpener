@@ -19,6 +19,8 @@ class SnapAccessibilityService : AccessibilityService() {
     private val prefs by lazy { getSharedPreferences("snapauto_diag", MODE_PRIVATE) }
 
     private var visualBusy = false
+    private var lastScreenshotAt = 0L
+    private var singleTapBusy = false
     private var navigatedToChats = false
     private var visualScrollPasses = 0
     private var lastOpenedY = -1f
@@ -62,6 +64,11 @@ class SnapAccessibilityService : AccessibilityService() {
             .putInt("snap_event_count", prefs.getInt("snap_event_count", 0) + 1)
             .apply()
 
+        if (SnapState.singleTapRequested) {
+            runSingleTapTest()
+            return
+        }
+
         if (SnapState.diagnosticRequested) {
             runVisualDiagnostic()
         }
@@ -75,6 +82,63 @@ class SnapAccessibilityService : AccessibilityService() {
             SnapState.batchMode = true
             SnapState.batchStopRequested = false
             scheduleVisualStep(450)
+        }
+    }
+
+    private fun runSingleTapTest() {
+        val now = System.currentTimeMillis()
+        if (now > SnapState.singleTapUntil) {
+            SnapState.singleTapRequested = false
+            prefs.edit().putString("visual_status", "Einzeltest abgelaufen: kein Tipp.").apply()
+            return
+        }
+        if (singleTapBusy || visualBusy || now - lastScreenshotAt < 1200L) return
+        singleTapBusy = true
+        visualBusy = true
+        takeVisualSnapshot { bitmap ->
+            visualBusy = false
+            if (!SnapState.singleTapRequested || System.currentTimeMillis() > SnapState.singleTapUntil) {
+                bitmap?.recycle()
+                SnapState.singleTapRequested = false
+                singleTapBusy = false
+                return@takeVisualSnapshot
+            }
+            if (bitmap == null) {
+                singleTapBusy = false
+                prefs.edit().putString("visual_status", "Einzeltest: Screenshot fehlgeschlagen; warte auf nächstes Event.").apply()
+                return@takeVisualSnapshot
+            }
+            val candidates = findSnapMarkers(bitmap)
+            val w = bitmap.width
+            val h = bitmap.height
+            bitmap.recycle()
+            prefs.edit()
+                .putBoolean("screenshot_ok", true)
+                .putInt("visual_candidates", candidates.size)
+                .apply()
+            // Conservative target area: colored icons in the left part of chat rows.
+            // This is not yet a verified unopened-Snap detector.
+            val target = candidates.firstOrNull {
+                it.first in (w * 0.12f)..(w * 0.28f) &&
+                it.second in (h * 0.15f)..(h * 0.80f)
+            }
+            if (target == null) {
+                singleTapBusy = false
+                prefs.edit().putString("visual_status", "Einzeltest: Kein Kandidat im linken Chat-Icon-Bereich; kein Tipp.").apply()
+                return@takeVisualSnapshot
+            }
+            // Disarm before dispatch to prevent a second tap on subsequent events.
+            SnapState.singleTapRequested = false
+            prefs.edit().putString("visual_status",
+                "Einzeltest: Sende genau einen Tipp bei (${target.first.toInt()},${target.second.toInt()}).").apply()
+            tap(target.first, target.second) {
+                singleTapBusy = false
+                prefs.edit()
+                    .putInt("visual_opened", 1)
+                    .putString("visual_status", "Einzeltest: Tipp-Geste abgeschlossen. Ob ein Snap geöffnet wurde, bitte visuell prüfen.")
+                    .putString("diagnostic_report", "Einzeltest: Genau eine Tipp-Geste bei (${target.first.toInt()},${target.second.toInt()}) abgeschlossen. Keine automatische Rücknavigation. Bitte prüfen, was geöffnet wurde.")
+                    .apply()
+            }
         }
     }
 
@@ -209,6 +273,7 @@ class SnapAccessibilityService : AccessibilityService() {
         }
 
         try {
+            lastScreenshotAt = System.currentTimeMillis()
             takeScreenshot(
                 Display.DEFAULT_DISPLAY,
                 mainExecutor,
