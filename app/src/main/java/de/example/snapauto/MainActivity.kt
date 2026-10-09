@@ -1,5 +1,7 @@
 package de.example.snapauto
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
@@ -18,6 +20,7 @@ class MainActivity : AppCompatActivity() {
 
     private val snapchatPackage = "com.snapchat.android"
     private val uiHandler = Handler(Looper.getMainLooper())
+
     private val refreshRunnable = object : Runnable {
         override fun run() {
             updateDiagnosticReport()
@@ -56,27 +59,41 @@ class MainActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
+            val now = System.currentTimeMillis()
             val diagPrefs = getSharedPreferences("snapauto_diag", MODE_PRIVATE)
             diagPrefs.edit()
                 .putBoolean("diagnostic_running", true)
+                .putLong("diagnostic_started_at", now)
                 .putString("diagnostic_report", "Diagnose gestartet. Öffnen Sie in Snapchat MANUELL die Chatliste und lassen Sie sie einige Sekunden sichtbar.")
                 .putInt("diagnostic_score", -1)
                 .putInt("event_count", 0)
                 .putInt("snap_event_count", 0)
                 .remove("last_event_package")
                 .remove("last_event_type")
+                .remove("last_event_at")
+                .remove("last_snap_event_at")
+                .remove("root_package")
+                .remove("root_available")
                 .apply()
 
             SnapState.batchMode = false
             SnapState.batchStopRequested = true
             SnapState.diagnosticReport = "Diagnose gestartet. Öffnen Sie in Snapchat MANUELL die Chatliste und lassen Sie sie einige Sekunden sichtbar."
             SnapState.diagnosticBestScore = -1
-            SnapState.diagnosticUntil = System.currentTimeMillis() + 20_000
+            SnapState.diagnosticUntil = now + 20_000
             SnapState.diagnosticRequested = true
 
             launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             startActivity(launchIntent)
             Toast.makeText(this, "20-Sekunden-Diagnose läuft. Jetzt in Snapchat den Chat-Tab öffnen.", Toast.LENGTH_LONG).show()
+        }
+
+        findViewById<Button>(R.id.copyDiagnostic).setOnClickListener {
+            val status = findViewById<TextView>(R.id.serviceStatus).text.toString()
+            val report = findViewById<TextView>(R.id.diagnosticReport).text.toString()
+            val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+            clipboard.setPrimaryClip(ClipData.newPlainText("SnapAuto Diagnose", "$status\n\n$report"))
+            Toast.makeText(this, "Diagnose kopiert.", Toast.LENGTH_SHORT).show()
         }
 
         findViewById<Button>(R.id.openExisting).setOnClickListener {
@@ -119,15 +136,18 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateDiagnosticReport() {
         val prefs = getSharedPreferences("snapauto_diag", MODE_PRIVATE)
+        val now = System.currentTimeMillis()
         val connected = prefs.getBoolean("service_connected", false)
         val heartbeat = prefs.getLong("heartbeat_at", 0L)
-        val alive = connected && System.currentTimeMillis() - heartbeat < 2500
+        val alive = connected && now - heartbeat < 2500
         val lastEvent = prefs.getLong("last_event_at", 0L)
         val lastSnapEvent = prefs.getLong("last_snap_event_at", 0L)
         val rootAvailable = prefs.getBoolean("root_available", false)
         val rootPackage = prefs.getString("root_package", "-") ?: "-"
         val events = prefs.getInt("event_count", 0)
         val snapEvents = prefs.getInt("snap_event_count", 0)
+        val startedAt = prefs.getLong("diagnostic_started_at", 0L)
+        val diagnosticAge = if (startedAt > 0) now - startedAt else 0L
         val report = prefs.getString("diagnostic_report", SnapState.diagnosticReport)
             ?: SnapState.diagnosticReport
 
@@ -136,7 +156,20 @@ class MainActivity : AppCompatActivity() {
             return SimpleDateFormat("HH:mm:ss", Locale.GERMANY).format(Date(value))
         }
 
+        val verdict = when {
+            !alive -> "ERGEBNIS: Accessibility-Service ist NICHT verbunden."
+            startedAt > 0 && diagnosticAge > 20_000 && snapEvents == 0 ->
+                "ERGEBNIS: Service läuft, aber es kam KEIN Snapchat-Accessibility-Event an."
+            snapEvents > 0 && !rootAvailable ->
+                "ERGEBNIS: Snapchat-Events kommen an, aber Android liefert KEINEN lesbaren UI-Baum."
+            snapEvents > 0 && rootAvailable ->
+                "ERGEBNIS: Snapchat-Events UND UI-Baum sind verfügbar."
+            else -> "ERGEBNIS: Service läuft. Diagnose starten und Snapchat-Chatliste öffnen."
+        }
+
         findViewById<TextView>(R.id.serviceStatus).text = buildString {
+            appendLine(verdict)
+            appendLine()
             appendLine("Service verbunden: ${if (alive) "JA" else "NEIN"}")
             appendLine("Letztes Event: ${time(lastEvent)}")
             appendLine("Letztes Snapchat-Event: ${time(lastSnapEvent)}")
