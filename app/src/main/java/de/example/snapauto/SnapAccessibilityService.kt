@@ -23,6 +23,10 @@ class SnapAccessibilityService : AccessibilityService() {
     private var singleTapBusy = false
     private var batchBusy = false
     private var batchSeenY = mutableListOf<Float>()
+    private var batchPhase = 0 // 0 filter, 1 chat list, 2 snap viewer
+    private var viewerTaps = 0
+    private var lastViewerSignature = 0L
+    private var unchangedViewerFrames = 0
     private var activeBatchId = -1
 
     private val heartbeat = object : Runnable {
@@ -183,10 +187,13 @@ class SnapAccessibilityService : AccessibilityService() {
         if (activeBatchId != runId) {
             activeBatchId = runId
             batchSeenY.clear()
+            batchPhase = 0
+            viewerTaps = 0
+            unchangedViewerFrames = 0
             batchBusy = false
         }
         if (!isBatchActive(runId)) {
-            SnapState.batchMode = false
+            finishBatch("Zeit- oder Versuchslimit erreicht.")
             return
         }
         if (batchBusy || visualBusy || System.currentTimeMillis() - lastScreenshotAt < 1200L) return
@@ -201,61 +208,142 @@ class SnapAccessibilityService : AccessibilityService() {
             }
             if (bitmap == null) {
                 batchBusy = false
-                prefs.edit().putString("visual_status", "Screenshot fehlgeschlagen; warte auf nächstes Event.").apply()
+                prefs.edit().putString("visual_status", "Screenshot fehlgeschlagen; warte auf Snapchat-Event.").apply()
                 return@takeVisualSnapshot
             }
             val w = bitmap.width
             val h = bitmap.height
-            val candidates = findSnapMarkers(bitmap)
-            bitmap.recycle()
-            val eligible = candidates.filter {
-                it.first in (w * 0.12f)..(w * 0.28f) &&
-                it.second in (h * 0.15f)..(h * 0.80f) &&
-                batchSeenY.none { y -> kotlin.math.abs(y - it.second) < 45f }
-            }
-            prefs.edit().putBoolean("screenshot_ok", true)
-                .putInt("visual_candidates", candidates.size).apply()
-            val target = eligible.firstOrNull()
-            if (target == null) {
-                SnapState.batchMode = false
-                batchBusy = false
-                prefs.edit().putString("visual_status",
-                    "Durchlauf beendet: keine weiteren unversuchten Marker im sichtbaren Bereich.")
-                    .putString("diagnostic_report",
-                        "Durchlauf beendet. Tipp-Versuche: ${SnapState.openedInBatch}. Sichtbare Liste abgearbeitet; keine Garantie, dass alle Snaps erkannt wurden.")
-                    .apply()
-                return@takeVisualSnapshot
-            }
-            batchSeenY.add(target.second)
-            prefs.edit().putString("visual_status",
-                "Versuch ${SnapState.openedInBatch + 1}: Tipp bei (${target.first.toInt()},${target.second.toInt()}).").apply()
-            if (!isBatchActive(runId)) {
-                batchBusy = false
-                return@takeVisualSnapshot
-            }
-            tap(target.first, target.second) {
-                if (!isBatchActive(runId)) {
+            if (batchPhase == 0) {
+                bitmap.recycle()
+                batchPhase = 1
+                prefs.edit().putString("visual_status", "Aktiviere Ungelesen-Filter.").apply()
+                tap(w * 0.17f, h * 0.149f) {
                     batchBusy = false
-                    return@tap
+                    handler.postDelayed({ if (isBatchActive(runId)) runManualBatch() }, 1350L)
                 }
-                SnapState.openedInBatch++
-                prefs.edit().putInt("visual_opened", SnapState.openedInBatch)
-                    .putString("visual_status", "Tipp ${SnapState.openedInBatch}/10 abgeschlossen; warte 3 Sekunden.")
-                    .apply()
-                handler.postDelayed({
-                    if (!isBatchActive(runId)) {
-                        batchBusy = false
-                        return@postDelayed
-                    }
-                    performGlobalAction(GLOBAL_ACTION_BACK)
-                    handler.postDelayed({
-                        batchBusy = false
-                        if (isBatchActive(runId)) runManualBatch()
-                        else SnapState.batchMode = false
-                    }, 1700L)
-                }, 3000L)
+                return@takeVisualSnapshot
+            }
+            if (batchPhase == 1) {
+                val targets = findFilledSnapIcons(bitmap)
+                bitmap.recycle()
+                prefs.edit().putInt("visual_candidates", targets.size).putBoolean("screenshot_ok", true).apply()
+                val target = targets.firstOrNull { candidate ->
+                    batchSeenY.none { kotlin.math.abs(it - candidate.second) < 48f }
+                }
+                if (target == null) {
+                    finishBatch("Keine weiteren ausgefüllten roten/lila Snap-Symbole im sichtbaren Bereich.")
+                    batchBusy = false
+                    return@takeVisualSnapshot
+                }
+                batchSeenY.add(target.second)
+                batchPhase = 2
+                viewerTaps = 0
+                unchangedViewerFrames = 0
+                lastViewerSignature = 0L
+                prefs.edit().putString("visual_status", "Öffne Snap bei (${target.first.toInt()},${target.second.toInt()}).").apply()
+                tap(target.first, target.second) {
+                    if (!isBatchActive(runId)) { batchBusy = false; return@tap }
+                    SnapState.openedInBatch++
+                    prefs.edit().putInt("visual_opened", SnapState.openedInBatch).apply()
+                    batchBusy = false
+                    handler.postDelayed({ if (isBatchActive(runId)) runManualBatch() }, 1400L)
+                }
+                return@takeVisualSnapshot
+            }
+            // Never blindly tap when the chat list is visible.
+            val chatListVisible = looksLikeChatList(bitmap)
+            val signature = visualSignature(bitmap)
+            bitmap.recycle()
+            if (chatListVisible) {
+                batchPhase = 1
+                batchBusy = false
+                handler.postDelayed({ if (isBatchActive(runId)) runManualBatch() }, 1300L)
+                return@takeVisualSnapshot
+            }
+            if (lastViewerSignature == signature) unchangedViewerFrames++ else unchangedViewerFrames = 0
+            lastViewerSignature = signature
+            if (viewerTaps >= 8 || unchangedViewerFrames >= 2) {
+                prefs.edit().putString("visual_status", "Snap-Serie: Zurück zur Chatliste (max. 8 Weiter-Tipps).").apply()
+                performGlobalAction(GLOBAL_ACTION_BACK)
+                batchPhase = 1
+                batchBusy = false
+                handler.postDelayed({ if (isBatchActive(runId)) runManualBatch() }, 1600L)
+                return@takeVisualSnapshot
+            }
+            viewerTaps++
+            prefs.edit().putString("visual_status", "Snap-Serie: Weiter-Tipp $viewerTaps/8.").apply()
+            tap(w * 0.82f, h * 0.53f) {
+                batchBusy = false
+                handler.postDelayed({ if (isBatchActive(runId)) runManualBatch() }, 1400L)
             }
         }
+    }
+
+    private fun finishBatch(reason: String) {
+        SnapState.batchMode = false
+        prefs.edit()
+            .putString("visual_status", "Durchlauf beendet: $reason")
+            .putString("diagnostic_report", "V3.4: $reason\\nChat-Öffnungsversuche: ${SnapState.openedInBatch}. Weitere Snaps innerhalb eines Chats werden nicht separat gezählt.")
+            .apply()
+    }
+
+    // Filled red/purple snap icon near left of row; outline icons and blue chats excluded.
+    private fun findFilledSnapIcons(bitmap: Bitmap): List<Pair<Float, Float>> {
+        val w = bitmap.width
+        val h = bitmap.height
+        val step = max(2, w / 400)
+        val result = mutableListOf<Pair<Float, Float>>()
+        var y = (h * 0.19f).toInt()
+        while (y < (h * 0.83f).toInt()) {
+            var bestX = -1
+            var bestCount = 0
+            var x = (w * 0.14f).toInt()
+            while (x < (w * 0.26f).toInt()) {
+                var hits = 0
+                for (dy in -6..6 step 3) for (dx in -6..6 step 3) {
+                    val px = (x + dx).coerceIn(0, w - 1)
+                    val py = (y + dy).coerceIn(0, h - 1)
+                    if (isSnapColor(bitmap.getPixel(px, py))) hits++
+                }
+                if (hits > bestCount) { bestCount = hits; bestX = x }
+                x += step
+            }
+            if (bestCount >= 18 && result.none { kotlin.math.abs(it.second - y) < h * 0.052f }) {
+                result.add(bestX.toFloat() to y.toFloat())
+            }
+            y += step * 3
+        }
+        return result
+    }
+
+    // Horizontal row separators in the Snapchat chat list (not present in snap viewer).
+    private fun looksLikeChatList(bitmap: Bitmap): Boolean {
+        val w = bitmap.width
+        val h = bitmap.height
+        var separators = 0
+        var y = (h * 0.17f).toInt()
+        while (y < (h * 0.85f).toInt()) {
+            var uniform = 0
+            for (i in 1..9) {
+                val pixel = bitmap.getPixel((w * i / 10), y)
+                val r = Color.red(pixel)
+                val g = Color.green(pixel)
+                val b = Color.blue(pixel)
+                if (kotlin.math.abs(r - g) < 12 && kotlin.math.abs(g - b) < 12 && r in 25..75) uniform++
+            }
+            if (uniform >= 8) separators++
+            y += max(8, h / 130)
+        }
+        return separators >= 5
+    }
+
+    private fun visualSignature(bitmap: Bitmap): Long {
+        var sum = 0L
+        for (yi in 1..9) for (xi in 1..7) {
+            val p = bitmap.getPixel(bitmap.width * xi / 8, bitmap.height * yi / 10)
+            sum = sum * 31L + (Color.red(p) / 32) * 64 + (Color.green(p) / 32) * 8 + Color.blue(p) / 32
+        }
+        return sum
     }
 
     private fun isBatchActive(runId: Int): Boolean {
