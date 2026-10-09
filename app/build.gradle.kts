@@ -8,8 +8,8 @@ android {
         applicationId = "de.example.snapauto"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.3-diagnostics-icon"
+        versionCode = 5
+        versionName = "2.0-visual"
     }
 
     compileOptions {
