@@ -11,7 +11,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Snap Auto Opener V3.2 – Einzeltest"
+            android:text="Snap Auto Opener V3.3 – Manueller Durchlauf"
             android:textStyle="bold"
             android:textSize="28sp"
             android:layout_marginBottom="12dp" />
@@ -19,7 +19,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="V3 arbeitet ohne Snapchat-UI-Baum: Screenshot-Erkennung + Gesten."
+            android:text="Nur auf Ihren Startbefehl: bis zu 10 Tipp-Versuche im sichtbaren Chatbereich."
             android:textSize="16sp"
             android:layout_marginBottom="18dp" />
 
@@ -98,20 +98,20 @@
             android:id="@+id/openExisting"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="V3.2: EINEN Tipp im Arbeitsprofil testen"
+            android:text="Snaps im Arbeitsprofil öffnen (START)"
             android:layout_marginTop="24dp" />
 
         <Button
             android:id="@+id/stopBatch"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Durchlauf stoppen"
+            android:text="STOPP – Durchlauf beenden"
             android:layout_marginTop="10dp" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="V3 verarbeitet Screenshots ausschließlich lokal im Arbeitsspeicher und speichert sie nicht."
+            android:text="V3.3 speichert keine Screenshots. Die Farberkennung ist experimentell; falsche Treffer sind möglich."
             android:layout_marginTop="24dp" />
     </LinearLayout>
 </ScrollView>
