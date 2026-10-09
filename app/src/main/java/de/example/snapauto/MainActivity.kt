@@ -53,21 +53,17 @@ class MainActivity : AppCompatActivity() {
         }
 
         findViewById<Button>(R.id.runDiagnostic).setOnClickListener {
-            val launchIntent = packageManager.getLaunchIntentForPackage(snapchatPackage)
-            if (launchIntent == null) {
-                Toast.makeText(this, "Snapchat ist in diesem Android-Profil nicht sichtbar.", Toast.LENGTH_LONG).show()
-                return@setOnClickListener
-            }
-
             val now = System.currentTimeMillis()
             val diagPrefs = getSharedPreferences("snapauto_diag", MODE_PRIVATE)
             diagPrefs.edit()
                 .putBoolean("diagnostic_running", true)
                 .putLong("diagnostic_started_at", now)
-                .putString("diagnostic_report", "Diagnose gestartet. Öffnen Sie in Snapchat MANUELL die Chatliste und lassen Sie sie einige Sekunden sichtbar.")
+                .putString("diagnostic_report", "Profil-Test läuft 30 Sekunden. Öffnen Sie Snapchat im ARBEITSPROFIL manuell und wechseln Sie zur Chatliste. Es werden keine Gesten ausgeführt.")
                 .putInt("diagnostic_score", -1)
                 .putInt("event_count", 0)
                 .putInt("snap_event_count", 0)
+                .putBoolean("screenshot_ok", false)
+                .putInt("visual_candidates", 0)
                 .remove("last_event_package")
                 .remove("last_event_type")
                 .remove("last_event_at")
@@ -78,14 +74,13 @@ class MainActivity : AppCompatActivity() {
 
             SnapState.batchMode = false
             SnapState.batchStopRequested = true
-            SnapState.diagnosticReport = "Diagnose gestartet. Öffnen Sie in Snapchat MANUELL die Chatliste und lassen Sie sie einige Sekunden sichtbar."
+            SnapState.pendingUntil = 0L
+            SnapState.diagnosticReport = "Profil-Test gestartet. Snapchat im Arbeitsprofil manuell öffnen."
             SnapState.diagnosticBestScore = -1
-            SnapState.diagnosticUntil = now + 20_000
+            SnapState.diagnosticUntil = now + 30_000
             SnapState.diagnosticRequested = true
 
-            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            startActivity(launchIntent)
-            Toast.makeText(this, "20-Sekunden-Diagnose läuft. Jetzt in Snapchat den Chat-Tab öffnen.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "30 Sekunden: Jetzt Snapchat im ARBEITSPROFIL manuell öffnen.", Toast.LENGTH_LONG).show()
         }
 
         findViewById<Button>(R.id.copyDiagnostic).setOnClickListener {
@@ -162,7 +157,7 @@ class MainActivity : AppCompatActivity() {
 
         val verdict = when {
             !alive -> "ERGEBNIS: Accessibility-Service ist NICHT verbunden."
-            startedAt > 0 && diagnosticAge > 20_000 && snapEvents == 0 ->
+            startedAt > 0 && diagnosticAge > 30_000 && snapEvents == 0 ->
                 "ERGEBNIS: Service läuft, aber es kam KEIN Snapchat-Accessibility-Event an."
             screenshotOk ->
                 "ERGEBNIS: V3 Screenshot-Zugriff funktioniert."
@@ -178,6 +173,7 @@ class MainActivity : AppCompatActivity() {
             appendLine("Letztes Event: ${time(lastEvent)}")
             appendLine("Letztes Snapchat-Event: ${time(lastSnapEvent)}")
             appendLine("Events / Snapchat: $events / $snapEvents")
+            appendLine("Letztes Event-Paket: ${prefs.getString("last_event_package", "-") ?: "-"}")
             appendLine("Screenshot: ${if (screenshotOk) "JA" else "NEIN"}")
             appendLine("Visuelle Kandidaten: $visualCandidates")
             appendLine("Visuell geöffnet: $visualOpened")
