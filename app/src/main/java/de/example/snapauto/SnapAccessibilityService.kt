@@ -62,6 +62,10 @@ class SnapAccessibilityService : AccessibilityService() {
             .putInt("snap_event_count", prefs.getInt("snap_event_count", 0) + 1)
             .apply()
 
+        if (SnapState.diagnosticRequested) {
+            runVisualDiagnostic()
+        }
+
         if (SnapState.batchMode && !SnapState.batchStopRequested) {
             scheduleVisualStep(450)
             return
@@ -71,6 +75,48 @@ class SnapAccessibilityService : AccessibilityService() {
             SnapState.batchMode = true
             SnapState.batchStopRequested = false
             scheduleVisualStep(450)
+        }
+    }
+
+    private fun runVisualDiagnostic() {
+        if (visualBusy) return
+        visualBusy = true
+        takeVisualSnapshot { bitmap ->
+            visualBusy = false
+            if (bitmap == null) {
+                prefs.edit()
+                    .putBoolean("screenshot_ok", false)
+                    .putString("diagnostic_report", "V3 Visual-Diagnose: Screenshot konnte nicht aufgenommen werden.")
+                    .apply()
+                return@takeVisualSnapshot
+            }
+
+            val candidates = findSnapMarkers(bitmap)
+            val width = bitmap.width
+            val height = bitmap.height
+            bitmap.recycle()
+
+            val positions = candidates.take(12).joinToString(separator = ", ") { "(${it.first.toInt()},${it.second.toInt()})" }
+            val report = buildString {
+                appendLine("V3 Visual-Diagnose")
+                appendLine("Screenshot: OK (${width}x${height})")
+                appendLine("Gefundene rote/lila Snap-Marker: ${candidates.size}")
+                if (candidates.isEmpty()) append("Keine passenden Marker erkannt.")
+                else append("Positionen: $positions")
+            }
+
+            prefs.edit()
+                .putBoolean("screenshot_ok", true)
+                .putInt("screenshot_width", width)
+                .putInt("screenshot_height", height)
+                .putInt("visual_candidates", candidates.size)
+                .putString("diagnostic_report", report)
+                .apply()
+
+            if (System.currentTimeMillis() >= SnapState.diagnosticUntil) {
+                SnapState.diagnosticRequested = false
+                prefs.edit().putBoolean("diagnostic_running", false).apply()
+            }
         }
     }
 
