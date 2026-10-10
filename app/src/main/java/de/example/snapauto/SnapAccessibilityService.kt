@@ -233,7 +233,7 @@ class SnapAccessibilityService : AccessibilityService() {
                     return@takeVisualSnapshot
                 }
                 if (unread == null) {
-                    finishBatch("Filter 'Ungelesen' im Accessibility-Baum nicht gefunden. Keine blinden Tipps.")
+                    finishBatch("Ungelesen nicht als Bedienelement verfügbar. Bitte Filter manuell auswählen.")
                     batchBusy = false
                     return@takeVisualSnapshot
                 }
@@ -244,7 +244,14 @@ class SnapAccessibilityService : AccessibilityService() {
                 }
                 val bounds = Rect()
                 unread.getBoundsInScreen(bounds)
-                val clickable = findClickableAncestor(unread)
+                val safeBounds = bounds.centerX() in (w * 0.03f).toInt()..(w * 0.30f).toInt() &&
+                    bounds.centerY() in (h * 0.11f).toInt()..(h * 0.18f).toInt()
+                if (!safeBounds) {
+                    finishBatch("Ungelesen-Treffer außerhalb des Filterbereichs; kein Tipp.")
+                    batchBusy = false
+                    return@takeVisualSnapshot
+                }
+                val clickable = if (unread.isClickable) unread else null
                 filterAttempts++
                 filterWasClicked = true
                 prefs.edit().putString("visual_status", "Ungelesen gefunden bei (${bounds.centerX()},${bounds.centerY()}); aktiviere Filter.").apply()
