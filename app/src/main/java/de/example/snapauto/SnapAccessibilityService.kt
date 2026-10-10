@@ -319,9 +319,10 @@ class SnapAccessibilityService : AccessibilityService() {
             }
             if (batchPhase == 1) {
                 if (!(hasChatHeaderAndFilter(rootInActiveWindow, w, h) ||
-                    (filterVerifiedByChange && detectUnreadChip(bitmap) != null && looksLikeChatList(bitmap))) ||
+                    (filterVerifiedByChange && detectUnreadChip(bitmap) != null)) ||
                     hasEditableComposer(rootInActiveWindow)) {
                     bitmap.recycle()
+                    logStep("Chatlisten-Check: visualFilter=" + (detectUnreadChip(bitmap) != null) + ", accessibilityFilter=" + hasChatHeaderAndFilter(rootInActiveWindow, w, h) + ", verified=" + filterVerifiedByChange + ", composer=" + hasEditableComposer(rootInActiveWindow))
                     finishBatch("Chatansicht vor Snap-Erkennung nicht sicher sichtbar.")
                     batchBusy = false
                     return@takeVisualSnapshot
@@ -366,7 +367,8 @@ class SnapAccessibilityService : AccessibilityService() {
             // Only treat it as the chat list if the chat header AND filter are in
             // their expected upper-screen bounds.
             val root = rootInActiveWindow
-            val chatListVisible = hasChatHeaderAndFilter(root, w, h)
+            val chatListVisible = hasChatHeaderAndFilter(root, w, h) ||
+                (filterVerifiedByChange && detectUnreadChip(bitmap) != null && !hasEditableComposer(root))
             val adVisible = hasAdvertisingMarker(root)
             val signature = visualSignature(bitmap)
             bitmap.recycle()
@@ -569,14 +571,14 @@ class SnapAccessibilityService : AccessibilityService() {
         trace.add(message)
         if (trace.size > 20) trace.removeAt(0)
         prefs.edit().putString("visual_status", message)
-            .putString("diagnostic_report", "V4.6 Ablauf:\n" + trace.joinToString("\n")).apply()
+            .putString("diagnostic_report", "V4.7 Ablauf:\n" + trace.joinToString("\n")).apply()
     }
 
     private fun finishBatch(reason: String) {
         SnapState.batchMode = false
         prefs.edit()
             .putString("visual_status", "Durchlauf beendet: $reason")
-            .putString("diagnostic_report", "V4.6: $reason\nChat-Öffnungsversuche: ${SnapState.openedInBatch}; Viewer-Weiter-Tipps: $viewerAdvanceTotal.\n" + trace.joinToString("\n"))
+            .putString("diagnostic_report", "V4.7: $reason\nChat-Öffnungsversuche: ${SnapState.openedInBatch}; Viewer-Weiter-Tipps: $viewerAdvanceTotal.\n" + trace.joinToString("\n"))
             .apply()
     }
 
