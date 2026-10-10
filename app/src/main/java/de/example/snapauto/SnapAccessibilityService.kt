@@ -35,6 +35,7 @@ class SnapAccessibilityService : AccessibilityService() {
     private var filterScreenshotBefore = 0L
     private var scrollCount = 0
     private var viewerStartedAt = 0L
+    private var filterVerifiedByChange = false
     private var filterWaitStartedAt = 0L
     private var filterStableFrames = 0
     private var lastFilterFrame = 0L
@@ -202,6 +203,7 @@ class SnapAccessibilityService : AccessibilityService() {
             filterAttempts = 0
             filterWasClicked = false
             filterScreenshotBefore = 0L
+            filterVerifiedByChange = false
             filterWaitStartedAt = System.currentTimeMillis()
             filterStableFrames = 0
             lastFilterFrame = 0L
@@ -251,11 +253,21 @@ class SnapAccessibilityService : AccessibilityService() {
                 }
                 if (filterWasClicked) {
                     val after = regionSignature(bitmap)
+                    val chatEvidence = safeNode || looksLikeChatList(bitmap) ||
+                        findNodeWithText(rootInActiveWindow, "Chat") != null
                     bitmap.recycle()
-                    finishBatch(if (after == filterScreenshotBefore)
-                        "Filter-Tipp ohne sichtbare Änderung."
-                    else "Filter reagiert, Auswahl aber nicht verifizierbar.")
-                    batchBusy = false
+                    if (after != filterScreenshotBefore && chatEvidence) {
+                        filterVerifiedByChange = true
+                        batchPhase = 1
+                        logStep("Ungelesen: Filterbereich verändert und Chatansicht vorhanden; fahre vorsichtig fort")
+                        batchBusy = false
+                        scheduleNext(runId, 1250L)
+                    } else {
+                        finishBatch(if (after == filterScreenshotBefore)
+                            "Filter-Tipp ohne sichtbare Änderung."
+                        else "Filter reagiert, Chatansicht nicht erkennbar.")
+                        batchBusy = false
+                    }
                     return@takeVisualSnapshot
                 }
                 val chatEvidence = safeNode || looksLikeChatList(bitmap) ||
@@ -283,6 +295,14 @@ class SnapAccessibilityService : AccessibilityService() {
                 return@takeVisualSnapshot
             }
             if (batchPhase == 1) {
+                if (findNodeWithText(rootInActiveWindow, "Chat") == null &&
+                    findNodeWithText(rootInActiveWindow, "Ungelesen") == null &&
+                    !looksLikeChatList(bitmap)) {
+                    bitmap.recycle()
+                    finishBatch("Chatansicht vor Snap-Erkennung nicht sicher sichtbar.")
+                    batchBusy = false
+                    return@takeVisualSnapshot
+                }
                 val targets = findFilledSnapIcons(bitmap)
                 bitmap.recycle()
                 prefs.edit().putInt("visual_candidates", targets.size).putBoolean("screenshot_ok", true).apply()
@@ -408,14 +428,14 @@ class SnapAccessibilityService : AccessibilityService() {
         trace.add(message)
         if (trace.size > 20) trace.removeAt(0)
         prefs.edit().putString("visual_status", message)
-            .putString("diagnostic_report", "V3.8 Ablauf:\n" + trace.joinToString("\n")).apply()
+            .putString("diagnostic_report", "V3.9 Ablauf:\n" + trace.joinToString("\n")).apply()
     }
 
     private fun finishBatch(reason: String) {
         SnapState.batchMode = false
         prefs.edit()
             .putString("visual_status", "Durchlauf beendet: $reason")
-            .putString("diagnostic_report", "V3.8: $reason\nChat-Öffnungsversuche: ${SnapState.openedInBatch}.\n" + trace.joinToString("\n"))
+            .putString("diagnostic_report", "V3.9: $reason\nChat-Öffnungsversuche: ${SnapState.openedInBatch}.\n" + trace.joinToString("\n"))
             .apply()
     }
 
