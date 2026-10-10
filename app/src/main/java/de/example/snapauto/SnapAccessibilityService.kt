@@ -283,9 +283,9 @@ class SnapAccessibilityService : AccessibilityService() {
                     }
                     return@takeVisualSnapshot
                 }
-                val chatEvidence = safeNode || looksLikeChatList(bitmap) ||
+                val chatEvidence = safeNode || (looksLikeChatList(bitmap) && !hasEditableComposer(rootInActiveWindow)) ||
                     (findNodeWithText(rootInActiveWindow, "My AI") != null &&
-                     findNodeWithText(rootInActiveWindow, "Chat") != null)
+                     findNodeWithText(rootInActiveWindow, "Chat") != null && !hasEditableComposer(rootInActiveWindow))
                 if (!chatEvidence) {
                     bitmap.recycle()
                     batchBusy = false
@@ -300,7 +300,7 @@ class SnapAccessibilityService : AccessibilityService() {
                 if (!safeNode) {
                     bitmap.recycle()
                     logStep("Ungelesen-Knoten fehlt oder liegt außerhalb des Filterbereichs: bounds=$bounds")
-                    finishBatch("Ungelesen-Schaltfläche nicht eindeutig gefunden; kein Koordinaten-Fallback.")
+                    finishBatch("Ungelesen nicht per Accessibility auffindbar. Bitte Filter manuell aktivieren; kein unsicherer Tipp.")
                     batchBusy = false
                     return@takeVisualSnapshot
                 }
@@ -540,14 +540,14 @@ class SnapAccessibilityService : AccessibilityService() {
         trace.add(message)
         if (trace.size > 20) trace.removeAt(0)
         prefs.edit().putString("visual_status", message)
-            .putString("diagnostic_report", "V4.5 Ablauf:\n" + trace.joinToString("\n")).apply()
+            .putString("diagnostic_report", "V4.6 Ablauf:\n" + trace.joinToString("\n")).apply()
     }
 
     private fun finishBatch(reason: String) {
         SnapState.batchMode = false
         prefs.edit()
             .putString("visual_status", "Durchlauf beendet: $reason")
-            .putString("diagnostic_report", "V4.5: $reason\nChat-Öffnungsversuche: ${SnapState.openedInBatch}; Viewer-Weiter-Tipps: $viewerAdvanceTotal.\n" + trace.joinToString("\n"))
+            .putString("diagnostic_report", "V4.6: $reason\nChat-Öffnungsversuche: ${SnapState.openedInBatch}; Viewer-Weiter-Tipps: $viewerAdvanceTotal.\n" + trace.joinToString("\n"))
             .apply()
     }
 
