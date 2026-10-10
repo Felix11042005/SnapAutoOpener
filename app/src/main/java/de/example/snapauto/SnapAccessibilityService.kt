@@ -376,8 +376,8 @@ class SnapAccessibilityService : AccessibilityService() {
             }
             // A conversation screen can resemble a Snap viewer. Never advance there.
             // An editable chat composer is strong evidence that this is NOT a Snap viewer.
-            if (hasEditableComposer(root)) {
-                finishBatch("Chat-Unterhaltung statt Snap geöffnet; keine Weiter-Tipps ausgeführt.")
+            if (hasEditableComposer(root) && !hasSnapViewerProgress(root)) {
+                finishBatch("Chat-Unterhaltung statt Snap-Viewer erkannt; keine Weiter-Tipps ausgeführt.")
                 batchBusy = false
                 return@takeVisualSnapshot
             }
@@ -406,11 +406,27 @@ class SnapAccessibilityService : AccessibilityService() {
             viewerTaps++
             viewerAdvanceTotal++
             logStep("Viewer-Weiter-Tipp $viewerTaps/8 (gesamt $viewerAdvanceTotal)")
-            tap(w * 0.82f, h * 0.53f) {
+            // Advance from the upper-right media area, well above the chat/reply controls.
+            tap(w * 0.86f, h * 0.27f) {
                 batchBusy = false
                 scheduleNext(runId, 1350L)
             }
         }
+    }
+
+    private fun hasSnapViewerProgress(root: AccessibilityNodeInfo?): Boolean {
+        if (root == null) return false
+        val queue = java.util.ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        var inspected = 0
+        while (!queue.isEmpty() && inspected++ < 350) {
+            val node = queue.removeFirst()
+            val text = listOfNotNull(node.text?.toString(), node.contentDescription?.toString())
+                .joinToString(" ").lowercase()
+            if (text.contains("antworten") || text.contains("reply to snap")) return true
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        return false
     }
 
     private fun hasEditableComposer(root: AccessibilityNodeInfo?): Boolean {
@@ -495,14 +511,14 @@ class SnapAccessibilityService : AccessibilityService() {
         trace.add(message)
         if (trace.size > 20) trace.removeAt(0)
         prefs.edit().putString("visual_status", message)
-            .putString("diagnostic_report", "V4.1 Ablauf:\n" + trace.joinToString("\n")).apply()
+            .putString("diagnostic_report", "V4.2 Ablauf:\n" + trace.joinToString("\n")).apply()
     }
 
     private fun finishBatch(reason: String) {
         SnapState.batchMode = false
         prefs.edit()
             .putString("visual_status", "Durchlauf beendet: $reason")
-            .putString("diagnostic_report", "V4.1: $reason\nChat-Öffnungsversuche: ${SnapState.openedInBatch}; Viewer-Weiter-Tipps: $viewerAdvanceTotal.\n" + trace.joinToString("\n"))
+            .putString("diagnostic_report", "V4.2: $reason\nChat-Öffnungsversuche: ${SnapState.openedInBatch}; Viewer-Weiter-Tipps: $viewerAdvanceTotal.\n" + trace.joinToString("\n"))
             .apply()
     }
 
