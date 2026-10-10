@@ -321,8 +321,8 @@ class SnapAccessibilityService : AccessibilityService() {
                 if (!(hasChatHeaderAndFilter(rootInActiveWindow, w, h) ||
                     (filterVerifiedByChange && detectUnreadChip(bitmap) != null)) ||
                     hasEditableComposer(rootInActiveWindow)) {
-                    bitmap.recycle()
                     logStep("Chatlisten-Check: visualFilter=" + (detectUnreadChip(bitmap) != null) + ", accessibilityFilter=" + hasChatHeaderAndFilter(rootInActiveWindow, w, h) + ", verified=" + filterVerifiedByChange + ", composer=" + hasEditableComposer(rootInActiveWindow))
+                    bitmap.recycle()
                     finishBatch("Chatansicht vor Snap-Erkennung nicht sicher sichtbar.")
                     batchBusy = false
                     return@takeVisualSnapshot
