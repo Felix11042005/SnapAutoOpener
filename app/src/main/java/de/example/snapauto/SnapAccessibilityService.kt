@@ -32,6 +32,10 @@ class SnapAccessibilityService : AccessibilityService() {
     private var activeBatchId = -1
     private var filterAttempts = 0
     private var filterWasClicked = false
+    private var filterScreenshotBefore = 0L
+    private var scrollCount = 0
+    private var viewerStartedAt = 0L
+    private val trace = mutableListOf<String>()
 
     private val heartbeat = object : Runnable {
         override fun run() {
@@ -194,6 +198,9 @@ class SnapAccessibilityService : AccessibilityService() {
             batchPhase = 0
             filterAttempts = 0
             filterWasClicked = false
+            filterScreenshotBefore = 0L
+            scrollCount = 0
+            trace.clear()
             viewerTaps = 0
             unchangedViewerFrames = 0
             batchBusy = false
@@ -220,52 +227,46 @@ class SnapAccessibilityService : AccessibilityService() {
             val w = bitmap.width
             val h = bitmap.height
             if (batchPhase == 0) {
-                bitmap.recycle()
-                val root = rootInActiveWindow
-                val unread = findNodeWithText(root, "Ungelesen")
-                val selected = unread?.isSelected == true || unread?.isChecked == true ||
-                    unread?.parent?.isSelected == true || unread?.parent?.isChecked == true
+                val unread = findNodeWithText(rootInActiveWindow, "Ungelesen")
+                val bounds = Rect()
+                unread?.getBoundsInScreen(bounds)
+                val safeNode = unread != null && !bounds.isEmpty &&
+                    bounds.centerX() in (w * 0.03f).toInt()..(w * 0.30f).toInt() &&
+                    bounds.centerY() in (h * 0.10f).toInt()..(h * 0.19f).toInt()
+                val selected = safeNode && (unread?.isSelected == true || unread?.isChecked == true ||
+                    unread?.parent?.isSelected == true || unread?.parent?.isChecked == true)
                 if (selected) {
+                    bitmap.recycle()
                     batchPhase = 1
-                    prefs.edit().putString("visual_status", "Ungelesen-Filter bestätigt.").apply()
+                    logStep("Ungelesen-Auswahl bestätigt")
                     batchBusy = false
-                    handler.postDelayed({ if (isBatchActive(runId)) runManualBatch() }, 1250L)
-                    return@takeVisualSnapshot
-                }
-                if (unread == null) {
-                    finishBatch("Ungelesen nicht als Bedienelement verfügbar. Bitte Filter manuell auswählen.")
-                    batchBusy = false
+                    scheduleNext(runId, 1200L)
                     return@takeVisualSnapshot
                 }
                 if (filterWasClicked) {
-                    finishBatch("Filter wurde angetippt, aber Aktivierung nicht bestätigt. Bitte Diagnose senden.")
+                    val after = regionSignature(bitmap)
+                    bitmap.recycle()
+                    finishBatch(if (after == filterScreenshotBefore)
+                        "Filter-Tipp ohne sichtbare Änderung."
+                    else "Filter reagiert, Auswahl aber nicht verifizierbar.")
                     batchBusy = false
                     return@takeVisualSnapshot
                 }
-                val bounds = Rect()
-                unread.getBoundsInScreen(bounds)
-                val safeBounds = bounds.centerX() in (w * 0.03f).toInt()..(w * 0.30f).toInt() &&
-                    bounds.centerY() in (h * 0.11f).toInt()..(h * 0.18f).toInt()
-                if (!safeBounds) {
-                    finishBatch("Ungelesen-Treffer außerhalb des Filterbereichs; kein Tipp.")
+                if (!safeNode && !looksLikeChatList(bitmap)) {
+                    bitmap.recycle()
+                    finishBatch("Chatliste nicht sicher erkannt. Kein Tipp.")
                     batchBusy = false
                     return@takeVisualSnapshot
                 }
-                val clickable = if (unread.isClickable) unread else null
-                filterAttempts++
+                filterScreenshotBefore = regionSignature(bitmap)
                 filterWasClicked = true
-                prefs.edit().putString("visual_status", "Ungelesen gefunden bei (${bounds.centerX()},${bounds.centerY()}); aktiviere Filter.").apply()
-                if (clickable != null && clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                val x = if (safeNode) bounds.centerX().toFloat() else w * 0.145f
+                val y = if (safeNode) bounds.centerY().toFloat() else h * 0.143f
+                bitmap.recycle()
+                logStep("Filter-Tipp bei (" + x.toInt() + "," + y.toInt() + ")")
+                tap(x, y) {
                     batchBusy = false
-                    handler.postDelayed({ if (isBatchActive(runId)) runManualBatch() }, 1350L)
-                } else if (!bounds.isEmpty) {
-                    tap(bounds.centerX().toFloat(), bounds.centerY().toFloat()) {
-                        batchBusy = false
-                        handler.postDelayed({ if (isBatchActive(runId)) runManualBatch() }, 1350L)
-                    }
-                } else {
-                    finishBatch("Filter hat keine nutzbare Bildschirmposition.")
-                    batchBusy = false
+                    scheduleNext(runId, 1350L)
                 }
                 return@takeVisualSnapshot
             }
@@ -277,12 +278,19 @@ class SnapAccessibilityService : AccessibilityService() {
                     batchSeenY.none { kotlin.math.abs(it - candidate.second) < 48f }
                 }
                 if (target == null) {
-                    finishBatch("Keine weiteren ausgefüllten roten/lila Snap-Symbole im sichtbaren Bereich.")
-                    batchBusy = false
+                    if (scrollCount++ < 2) {
+                        batchSeenY.clear()
+                        logStep("Chatliste scrollen")
+                        scrollChatList { batchBusy = false; scheduleNext(runId, 1250L) }
+                    } else {
+                        finishBatch("Keine weiteren gefüllten Snap-Symbole.")
+                        batchBusy = false
+                    }
                     return@takeVisualSnapshot
                 }
                 batchSeenY.add(target.second)
                 batchPhase = 2
+                viewerStartedAt = System.currentTimeMillis()
                 viewerTaps = 0
                 unchangedViewerFrames = 0
                 lastViewerSignature = 0L
@@ -315,7 +323,7 @@ class SnapAccessibilityService : AccessibilityService() {
             }
             if (lastViewerSignature == signature) unchangedViewerFrames++ else unchangedViewerFrames = 0
             lastViewerSignature = signature
-            if (viewerTaps >= 8 || unchangedViewerFrames >= 2) {
+            if (viewerTaps >= 8 || unchangedViewerFrames >= 2 || System.currentTimeMillis() - viewerStartedAt > 18000L) {
                 prefs.edit().putString("visual_status", "Snap-Serie: Zurück zur Chatliste (max. 8 Weiter-Tipps).").apply()
                 performGlobalAction(GLOBAL_ACTION_BACK)
                 batchPhase = 1
@@ -370,11 +378,32 @@ class SnapAccessibilityService : AccessibilityService() {
         return false
     }
 
+    private fun scheduleNext(id: Int, delay: Long) {
+        handler.postDelayed({ if (isBatchActive(id)) runManualBatch() }, delay)
+    }
+
+    private fun regionSignature(bitmap: Bitmap): Long {
+        var signature = 1L
+        for (i in 0..8) for (j in 0..6) {
+            val x = ((0.04f + i * 0.028f) * bitmap.width).toInt().coerceIn(0, bitmap.width - 1)
+            val y = ((0.12f + j * 0.009f) * bitmap.height).toInt().coerceIn(0, bitmap.height - 1)
+            signature = signature * 31 + (bitmap.getPixel(x, y) and 0x00f0f0f0)
+        }
+        return signature
+    }
+
+    private fun logStep(message: String) {
+        trace.add(message)
+        if (trace.size > 20) trace.removeAt(0)
+        prefs.edit().putString("visual_status", message)
+            .putString("diagnostic_report", "V3.7 Ablauf:\\n" + trace.joinToString("\\n")).apply()
+    }
+
     private fun finishBatch(reason: String) {
         SnapState.batchMode = false
         prefs.edit()
             .putString("visual_status", "Durchlauf beendet: $reason")
-            .putString("diagnostic_report", "V3.5: $reason\nChat-Öffnungsversuche: ${SnapState.openedInBatch}. Weitere Snaps innerhalb eines Chats werden nicht separat gezählt.")
+            .putString("diagnostic_report", "V3.7: $reason\nChat-Öffnungsversuche: ${SnapState.openedInBatch}. Weitere Snaps innerhalb eines Chats werden nicht separat gezählt.")
             .apply()
     }
 
