@@ -300,7 +300,7 @@ class SnapAccessibilityService : AccessibilityService() {
                 if (!safeNode) {
                     bitmap.recycle()
                     logStep("Ungelesen-Knoten fehlt oder liegt außerhalb des Filterbereichs: bounds=$bounds")
-                    finishBatch("Ungelesen nicht per Accessibility auffindbar. Bitte Filter manuell aktivieren; kein unsicherer Tipp.")
+                    finishBatch("Ungelesen nicht eindeutig erkannt. Kein automatischer Tipp auf My AI oder Chat.")
                     batchBusy = false
                     return@takeVisualSnapshot
                 }
