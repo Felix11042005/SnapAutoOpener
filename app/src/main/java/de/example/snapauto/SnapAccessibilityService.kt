@@ -250,7 +250,7 @@ class SnapAccessibilityService : AccessibilityService() {
                 val unread = findNodeWithText(rootInActiveWindow, "Ungelesen")
                 val bounds = Rect()
                 unread?.getBoundsInScreen(bounds)
-                val safeNode = unread != null && !bounds.isEmpty &&
+                val safeNode = unread != null && unread.text?.toString()?.trim()?.equals("Ungelesen", ignoreCase = true) == true && !bounds.isEmpty &&
                     bounds.centerX() in (w * 0.03f).toInt()..(w * 0.30f).toInt() &&
                     bounds.centerY() in (h * 0.10f).toInt()..(h * 0.19f).toInt()
                 val selected = safeNode && (unread?.isSelected == true || unread?.isChecked == true ||
@@ -265,10 +265,9 @@ class SnapAccessibilityService : AccessibilityService() {
                 }
                 if (filterWasClicked) {
                     val after = regionSignature(bitmap)
-                    val chatEvidence = safeNode || looksLikeChatList(bitmap) ||
-                        findNodeWithText(rootInActiveWindow, "Chat") != null
+                    val chatEvidence = hasChatHeaderAndFilter(rootInActiveWindow, w, h)
                     bitmap.recycle()
-                    if (after != filterScreenshotBefore && chatEvidence) {
+                    if (after != filterScreenshotBefore && chatEvidence && !hasEditableComposer(rootInActiveWindow)) {
                         filterVerifiedByChange = true
                         batchPhase = 1
                         logStep("Ungelesen: Filterbereich verändert und Chatansicht vorhanden; fahre vorsichtig fort")
@@ -296,8 +295,14 @@ class SnapAccessibilityService : AccessibilityService() {
                 }
                 filterScreenshotBefore = regionSignature(bitmap)
                 filterWasClicked = true
-                val x = if (safeNode) bounds.centerX().toFloat() else w * 0.145f
-                val y = if (safeNode) bounds.centerY().toFloat() else h * 0.143f
+                if (!safeNode) {
+                    bitmap.recycle()
+                    finishBatch("Ungelesen-Schaltfläche nicht eindeutig gefunden; kein Koordinaten-Fallback.")
+                    batchBusy = false
+                    return@takeVisualSnapshot
+                }
+                val x = bounds.centerX().toFloat()
+                val y = bounds.centerY().toFloat()
                 bitmap.recycle()
                 logStep("Filter-Tipp bei (" + x.toInt() + "," + y.toInt() + ")")
                 tap(x, y) {
@@ -307,9 +312,7 @@ class SnapAccessibilityService : AccessibilityService() {
                 return@takeVisualSnapshot
             }
             if (batchPhase == 1) {
-                if (findNodeWithText(rootInActiveWindow, "Chat") == null &&
-                    findNodeWithText(rootInActiveWindow, "Ungelesen") == null &&
-                    !looksLikeChatList(bitmap)) {
+                if (!hasChatHeaderAndFilter(rootInActiveWindow, w, h) || hasEditableComposer(rootInActiveWindow)) {
                     bitmap.recycle()
                     finishBatch("Chatansicht vor Snap-Erkennung nicht sicher sichtbar.")
                     batchBusy = false
@@ -492,14 +495,14 @@ class SnapAccessibilityService : AccessibilityService() {
         trace.add(message)
         if (trace.size > 20) trace.removeAt(0)
         prefs.edit().putString("visual_status", message)
-            .putString("diagnostic_report", "V4.0 Ablauf:\n" + trace.joinToString("\n")).apply()
+            .putString("diagnostic_report", "V4.1 Ablauf:\n" + trace.joinToString("\n")).apply()
     }
 
     private fun finishBatch(reason: String) {
         SnapState.batchMode = false
         prefs.edit()
             .putString("visual_status", "Durchlauf beendet: $reason")
-            .putString("diagnostic_report", "V4.0: $reason\nChat-Öffnungsversuche: ${SnapState.openedInBatch}; Viewer-Weiter-Tipps: $viewerAdvanceTotal.\n" + trace.joinToString("\n"))
+            .putString("diagnostic_report", "V4.1: $reason\nChat-Öffnungsversuche: ${SnapState.openedInBatch}; Viewer-Weiter-Tipps: $viewerAdvanceTotal.\n" + trace.joinToString("\n"))
             .apply()
     }
 
@@ -507,29 +510,39 @@ class SnapAccessibilityService : AccessibilityService() {
     private fun findFilledSnapIcons(bitmap: Bitmap): List<Pair<Float, Float>> {
         val w = bitmap.width
         val h = bitmap.height
-        val step = max(2, w / 400)
-        val result = mutableListOf<Pair<Float, Float>>()
-        var y = (h * 0.19f).toInt()
-        while (y < (h * 0.83f).toInt()) {
-            var bestX = -1
-            var bestCount = 0
+        val results = mutableListOf<Pair<Float, Float>>()
+        // Examine a compact icon footprint, not an arbitrary colored patch in a chat row.
+        val radius = max(5, (w * 0.010f).toInt())
+        val stride = max(4, radius)
+        var y = (h * 0.205f).toInt()
+        while (y < (h * 0.81f).toInt()) {
             var x = (w * 0.14f).toInt()
             while (x < (w * 0.26f).toInt()) {
-                var hits = 0
-                for (dy in -6..6 step 3) for (dx in -6..6 step 3) {
-                    val px = (x + dx).coerceIn(0, w - 1)
-                    val py = (y + dy).coerceIn(0, h - 1)
-                    if (isSnapColor(bitmap.getPixel(px, py))) hits++
+                var redPurple = 0
+                var blue = 0
+                var centerFilled = 0
+                var total = 0
+                for (dy in -radius..radius step 3) for (dx in -radius..radius step 3) {
+                    val pixel = bitmap.getPixel((x + dx).coerceIn(0, w - 1), (y + dy).coerceIn(0, h - 1))
+                    if (isSnapColor(pixel)) {
+                        redPurple++
+                        if (kotlin.math.abs(dx) <= radius / 2 && kotlin.math.abs(dy) <= radius / 2) centerFilled++
+                    }
+                    if (Color.blue(pixel) > Color.red(pixel) * 1.3f &&
+                        Color.blue(pixel) > Color.green(pixel) * 1.2f &&
+                        Color.blue(pixel) > 120) blue++
+                    total++
                 }
-                if (hits > bestCount) { bestCount = hits; bestX = x }
-                x += step
+                // Filled center excludes hollow red/purple icons; blue veto excludes chats.
+                if (redPurple >= total * 0.72f && centerFilled >= 8 && blue == 0 &&
+                    results.none { kotlin.math.abs(it.second - y) < h * 0.052f }) {
+                    results.add(x.toFloat() to y.toFloat())
+                }
+                x += stride
             }
-            if (bestCount >= 18 && result.none { kotlin.math.abs(it.second - y) < h * 0.052f }) {
-                result.add(bestX.toFloat() to y.toFloat())
-            }
-            y += step * 3
+            y += stride
         }
-        return result
+        return results
     }
 
     // Horizontal row separators in the Snapchat chat list (not present in snap viewer).
