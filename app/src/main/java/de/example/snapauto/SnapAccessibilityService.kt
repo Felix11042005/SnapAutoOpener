@@ -318,7 +318,9 @@ class SnapAccessibilityService : AccessibilityService() {
                 return@takeVisualSnapshot
             }
             if (batchPhase == 1) {
-                if (!hasChatHeaderAndFilter(rootInActiveWindow, w, h) || hasEditableComposer(rootInActiveWindow)) {
+                if (!(hasChatHeaderAndFilter(rootInActiveWindow, w, h) ||
+                    (filterVerifiedByChange && detectUnreadChip(bitmap) != null && looksLikeChatList(bitmap))) ||
+                    hasEditableComposer(rootInActiveWindow)) {
                     bitmap.recycle()
                     finishBatch("Chatansicht vor Snap-Erkennung nicht sicher sichtbar.")
                     batchBusy = false
