@@ -248,73 +248,27 @@ class SnapAccessibilityService : AccessibilityService() {
             val h = bitmap.height
             prefs.edit().putBoolean("screenshot_ok", true).apply()
             if (batchPhase == 0) {
-                val unread = findUnreadFilter(rootInActiveWindow, w, h)
-                val bounds = Rect()
-                unread?.getBoundsInScreen(bounds)
-                val safeNode = unread != null && (unread.text?.toString()?.contains("Ungelesen", ignoreCase = true) == true ||
-                     unread.contentDescription?.toString()?.contains("Ungelesen", ignoreCase = true) == true) && !bounds.isEmpty &&
-                    bounds.centerX() in (w * 0.03f).toInt()..(w * 0.30f).toInt() &&
-                    bounds.centerY() in (h * 0.10f).toInt()..(h * 0.19f).toInt()
-                val selected = safeNode && (unread?.isSelected == true || unread?.isChecked == true ||
-                    unread?.parent?.isSelected == true || unread?.parent?.isChecked == true)
-                if (selected) {
-                    bitmap.recycle()
-                    batchPhase = 1
-                    logStep("Ungelesen-Auswahl bestätigt")
-                    batchBusy = false
-                    scheduleNext(runId, 1200L)
-                    return@takeVisualSnapshot
-                }
-                if (filterWasClicked) {
-                    val after = regionSignature(bitmap)
-                    val chatEvidence = hasChatHeaderAndFilter(rootInActiveWindow, w, h) ||
-                        (detectUnreadChip(bitmap) != null && looksLikeChatList(bitmap))
-                    val composer = hasEditableComposer(rootInActiveWindow)
-                    bitmap.recycle()
-                    if (after != filterScreenshotBefore && chatEvidence && !composer) {
-                        filterVerifiedByChange = true
-                        batchPhase = 1
-                        logStep("Ungelesen: Filterbereich verändert und Chatansicht vorhanden; fahre vorsichtig fort")
-                        batchBusy = false
-                        scheduleNext(runId, 1250L)
-                    } else {
-                        finishBatch(if (after == filterScreenshotBefore)
-                            "Filter-Tipp ohne sichtbare Änderung."
-                        else "Filter reagiert, Chatansicht nicht erkennbar.")
-                        batchBusy = false
-                    }
-                    return@takeVisualSnapshot
-                }
-                val screenshotFilter = if (!safeNode) detectUnreadChip(bitmap) else null
-                val chatEvidence = safeNode || screenshotFilter != null || (looksLikeChatList(bitmap) && !hasEditableComposer(rootInActiveWindow)) ||
-                    (findNodeWithText(rootInActiveWindow, "My AI") != null &&
-                     findNodeWithText(rootInActiveWindow, "Chat") != null && !hasEditableComposer(rootInActiveWindow))
-                if (!chatEvidence) {
-                    bitmap.recycle()
-                    batchBusy = false
-                    if (System.currentTimeMillis() - filterWaitStartedAt < 5000L) {
-                        logStep("Warte auf Snapchat-Chatliste (max. 5 Sekunden)")
-                        scheduleNext(runId, 1350L)
-                    } else finishBatch("Chatliste nach 5 Sekunden nicht erkannt. Kein Tipp.")
-                    return@takeVisualSnapshot
-                }
-                filterScreenshotBefore = regionSignature(bitmap)
-                if (!safeNode && screenshotFilter == null) {
-                    bitmap.recycle()
-                    logStep("Ungelesen: weder Accessibility-Knoten noch visuell plausibler Filterchip gefunden; bounds=$bounds")
-                    finishBatch("Ungelesen nicht eindeutig erkannt. Kein automatischer Tipp auf My AI oder Chat.")
-                    batchBusy = false
-                    return@takeVisualSnapshot
-                }
-                val x = if (safeNode) bounds.centerX().toFloat() else screenshotFilter!!.first
-                val y = if (safeNode) bounds.centerY().toFloat() else screenshotFilter!!.second
-                filterWasClicked = true
+                // V4.8: User activates "Ungelesen" manually BEFORE START.
+                // Never tap a guessed filter location.
+                val root = rootInActiveWindow
+                val composer = hasEditableComposer(root)
+                val visualChip = detectUnreadChip(bitmap) != null
+                val accessibilityHeader = hasChatHeaderAndFilter(root, w, h)
+                val snapCount = findFilledSnapIcons(bitmap).size
+                logStep("Manueller Filter: chip=$visualChip, header=$accessibilityHeader, composer=$composer, snapCandidates=$snapCount")
                 bitmap.recycle()
-                logStep("Filter-Tipp bei (" + x.toInt() + "," + y.toInt() + ")")
-                tap(x, y) {
+                if (composer || (!visualChip && !accessibilityHeader)) {
+                    finishBatch("Chatliste nicht plausibel. Bitte Snapchat-Chats öffnen und Ungelesen manuell aktivieren.")
                     batchBusy = false
-                    scheduleNext(runId, 1350L)
+                    return@takeVisualSnapshot
                 }
+                // We cannot prove filter selection via screenshot; user explicitly
+                // confirms it by starting the run after manually selecting it.
+                filterVerifiedByChange = true
+                batchPhase = 1
+                logStep("Manueller Ungelesen-Filter vorausgesetzt; starte Snap-Suche ohne Filter-Tipp.")
+                batchBusy = false
+                scheduleNext(runId, 1250L)
                 return@takeVisualSnapshot
             }
             if (batchPhase == 1) {
@@ -571,14 +525,14 @@ class SnapAccessibilityService : AccessibilityService() {
         trace.add(message)
         if (trace.size > 20) trace.removeAt(0)
         prefs.edit().putString("visual_status", message)
-            .putString("diagnostic_report", "V4.7 Ablauf:\n" + trace.joinToString("\n")).apply()
+            .putString("diagnostic_report", "V4.8 Ablauf:\n" + trace.joinToString("\n")).apply()
     }
 
     private fun finishBatch(reason: String) {
         SnapState.batchMode = false
         prefs.edit()
             .putString("visual_status", "Durchlauf beendet: $reason")
-            .putString("diagnostic_report", "V4.7: $reason\nChat-Öffnungsversuche: ${SnapState.openedInBatch}; Viewer-Weiter-Tipps: $viewerAdvanceTotal.\n" + trace.joinToString("\n"))
+            .putString("diagnostic_report", "V4.8: $reason\nChat-Öffnungsversuche: ${SnapState.openedInBatch}; Viewer-Weiter-Tipps: $viewerAdvanceTotal.\n" + trace.joinToString("\n"))
             .apply()
     }
 
