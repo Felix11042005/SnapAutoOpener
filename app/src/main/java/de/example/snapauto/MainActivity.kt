@@ -82,6 +82,26 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "30 Sekunden: Jetzt Snapchat im VERTRAULICHEN PROFIL manuell öffnen.", Toast.LENGTH_LONG).show()
         }
 
+        findViewById<Button>(R.id.resetDiagnostic).setOnClickListener {
+            SnapState.batchMode = false
+            SnapState.batchStopRequested = true
+            SnapState.batchRunId++
+            SnapState.diagnosticRequested = false
+            SnapState.singleTapRequested = false
+            SnapState.openedInBatch = 0
+            SnapState.diagnosticReport = "Noch keine Diagnose durchgeführt."
+            val p = getSharedPreferences("snapauto_diag", MODE_PRIVATE)
+            val connected = p.getBoolean("service_connected", false)
+            val heartbeat = p.getLong("heartbeat_at", 0L)
+            p.edit().clear().putBoolean("service_connected", connected)
+                .putLong("heartbeat_at", heartbeat)
+                .putString("diagnostic_report", "Noch keine Diagnose durchgeführt.")
+                .putString("visual_status", "Zurückgesetzt.")
+                .apply()
+            updateDiagnosticReport()
+            Toast.makeText(this, "Diagnose zurückgesetzt.", Toast.LENGTH_SHORT).show()
+        }
+
         findViewById<Button>(R.id.copyDiagnostic).setOnClickListener {
             val status = findViewById<TextView>(R.id.serviceStatus).text.toString()
             val report = findViewById<TextView>(R.id.diagnosticReport).text.toString()
