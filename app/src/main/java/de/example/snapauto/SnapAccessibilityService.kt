@@ -35,6 +35,9 @@ class SnapAccessibilityService : AccessibilityService() {
     private var filterScreenshotBefore = 0L
     private var scrollCount = 0
     private var viewerStartedAt = 0L
+    private var filterWaitStartedAt = 0L
+    private var filterStableFrames = 0
+    private var lastFilterFrame = 0L
     private val trace = mutableListOf<String>()
 
     private val heartbeat = object : Runnable {
@@ -199,6 +202,9 @@ class SnapAccessibilityService : AccessibilityService() {
             filterAttempts = 0
             filterWasClicked = false
             filterScreenshotBefore = 0L
+            filterWaitStartedAt = System.currentTimeMillis()
+            filterStableFrames = 0
+            lastFilterFrame = 0L
             scrollCount = 0
             trace.clear()
             viewerTaps = 0
@@ -252,10 +258,16 @@ class SnapAccessibilityService : AccessibilityService() {
                     batchBusy = false
                     return@takeVisualSnapshot
                 }
-                if (!safeNode && !looksLikeChatList(bitmap)) {
+                val chatEvidence = safeNode || looksLikeChatList(bitmap) ||
+                    (findNodeWithText(rootInActiveWindow, "My AI") != null &&
+                     findNodeWithText(rootInActiveWindow, "Chat") != null)
+                if (!chatEvidence) {
                     bitmap.recycle()
-                    finishBatch("Chatliste nicht sicher erkannt. Kein Tipp.")
                     batchBusy = false
+                    if (System.currentTimeMillis() - filterWaitStartedAt < 5000L) {
+                        logStep("Warte auf Snapchat-Chatliste (max. 5 Sekunden)")
+                        scheduleNext(runId, 1350L)
+                    } else finishBatch("Chatliste nach 5 Sekunden nicht erkannt. Kein Tipp.")
                     return@takeVisualSnapshot
                 }
                 filterScreenshotBefore = regionSignature(bitmap)
@@ -396,14 +408,14 @@ class SnapAccessibilityService : AccessibilityService() {
         trace.add(message)
         if (trace.size > 20) trace.removeAt(0)
         prefs.edit().putString("visual_status", message)
-            .putString("diagnostic_report", "V3.7 Ablauf:\\n" + trace.joinToString("\\n")).apply()
+            .putString("diagnostic_report", "V3.8 Ablauf:\n" + trace.joinToString("\n")).apply()
     }
 
     private fun finishBatch(reason: String) {
         SnapState.batchMode = false
         prefs.edit()
             .putString("visual_status", "Durchlauf beendet: $reason")
-            .putString("diagnostic_report", "V3.7: $reason\nChat-Öffnungsversuche: ${SnapState.openedInBatch}. Weitere Snaps innerhalb eines Chats werden nicht separat gezählt.")
+            .putString("diagnostic_report", "V3.8: $reason\nChat-Öffnungsversuche: ${SnapState.openedInBatch}.\n" + trace.joinToString("\n"))
             .apply()
     }
 
