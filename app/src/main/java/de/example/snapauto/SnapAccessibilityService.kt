@@ -371,6 +371,13 @@ class SnapAccessibilityService : AccessibilityService() {
                 scheduleNext(runId, 1300L)
                 return@takeVisualSnapshot
             }
+            // A conversation screen can resemble a Snap viewer. Never advance there.
+            // An editable chat composer is strong evidence that this is NOT a Snap viewer.
+            if (hasEditableComposer(root)) {
+                finishBatch("Chat-Unterhaltung statt Snap geöffnet; keine Weiter-Tipps ausgeführt.")
+                batchBusy = false
+                return@takeVisualSnapshot
+            }
             if (viewerBackPending) {
                 chatReturnChecks++
                 if (chatReturnChecks >= 3) {
@@ -401,6 +408,19 @@ class SnapAccessibilityService : AccessibilityService() {
                 scheduleNext(runId, 1350L)
             }
         }
+    }
+
+    private fun hasEditableComposer(root: AccessibilityNodeInfo?): Boolean {
+        if (root == null) return false
+        val queue = java.util.ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        var checked = 0
+        while (!queue.isEmpty() && checked++ < 400) {
+            val node = queue.removeFirst()
+            if (node.isEditable || node.className?.toString()?.contains("EditText") == true) return true
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        return false
     }
 
     private fun hasChatHeaderAndFilter(root: AccessibilityNodeInfo?, w: Int, h: Int): Boolean {
