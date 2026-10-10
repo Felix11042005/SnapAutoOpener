@@ -248,7 +248,7 @@ class SnapAccessibilityService : AccessibilityService() {
             val h = bitmap.height
             prefs.edit().putBoolean("screenshot_ok", true).apply()
             if (batchPhase == 0) {
-                val unread = findNodeWithText(rootInActiveWindow, "Ungelesen")
+                val unread = findUnreadFilter(rootInActiveWindow, w, h)
                 val bounds = Rect()
                 unread?.getBoundsInScreen(bounds)
                 val safeNode = unread != null && (unread.text?.toString()?.contains("Ungelesen", ignoreCase = true) == true ||
@@ -447,7 +447,7 @@ class SnapAccessibilityService : AccessibilityService() {
 
     private fun hasChatHeaderAndFilter(root: AccessibilityNodeInfo?, w: Int, h: Int): Boolean {
         val chat = findNodeWithText(root, "Chat") ?: return false
-        val unread = findNodeWithText(root, "Ungelesen") ?: return false
+        val unread = findUnreadFilter(root, w, h) ?: return false
         val chatBounds = Rect()
         val filterBounds = Rect()
         chat.getBoundsInScreen(chatBounds)
@@ -456,6 +456,32 @@ class SnapAccessibilityService : AccessibilityService() {
             chatBounds.centerY() in (h * 0.045f).toInt()..(h * 0.13f).toInt() &&
             filterBounds.centerY() in (h * 0.10f).toInt()..(h * 0.19f).toInt() &&
             filterBounds.centerX() in (w * 0.03f).toInt()..(w * 0.30f).toInt()
+    }
+
+    private fun findUnreadFilter(root: AccessibilityNodeInfo?, w: Int, h: Int): AccessibilityNodeInfo? {
+        if (root == null) return null
+        val queue = java.util.ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        var visited = 0
+        var best: AccessibilityNodeInfo? = null
+        var bestScore = -1
+        while (!queue.isEmpty() && visited++ < 800) {
+            val node = queue.removeFirst()
+            val label = (node.text?.toString().orEmpty() + " " +
+                node.contentDescription?.toString().orEmpty()).trim()
+            val bounds = Rect()
+            node.getBoundsInScreen(bounds)
+            if (label.contains("Ungelesen", ignoreCase = true) && !bounds.isEmpty &&
+                bounds.centerX() in (w * 0.03f).toInt()..(w * 0.30f).toInt() &&
+                bounds.centerY() in (h * 0.10f).toInt()..(h * 0.19f).toInt()) {
+                val score = (if (label.equals("Ungelesen", true)) 10 else 0) +
+                    (if (node.isClickable) 3 else 0) +
+                    (if (node.isVisibleToUser) 2 else 0)
+                if (score > bestScore) { best = node; bestScore = score }
+            }
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        return best
     }
 
     private fun findNodeWithText(root: AccessibilityNodeInfo?, target: String): AccessibilityNodeInfo? {
@@ -514,14 +540,14 @@ class SnapAccessibilityService : AccessibilityService() {
         trace.add(message)
         if (trace.size > 20) trace.removeAt(0)
         prefs.edit().putString("visual_status", message)
-            .putString("diagnostic_report", "V4.4 Ablauf:\n" + trace.joinToString("\n")).apply()
+            .putString("diagnostic_report", "V4.5 Ablauf:\n" + trace.joinToString("\n")).apply()
     }
 
     private fun finishBatch(reason: String) {
         SnapState.batchMode = false
         prefs.edit()
             .putString("visual_status", "Durchlauf beendet: $reason")
-            .putString("diagnostic_report", "V4.4: $reason\nChat-Öffnungsversuche: ${SnapState.openedInBatch}; Viewer-Weiter-Tipps: $viewerAdvanceTotal.\n" + trace.joinToString("\n"))
+            .putString("diagnostic_report", "V4.5: $reason\nChat-Öffnungsversuche: ${SnapState.openedInBatch}; Viewer-Weiter-Tipps: $viewerAdvanceTotal.\n" + trace.joinToString("\n"))
             .apply()
     }
 
