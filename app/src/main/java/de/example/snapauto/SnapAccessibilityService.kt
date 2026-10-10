@@ -267,9 +267,11 @@ class SnapAccessibilityService : AccessibilityService() {
                 }
                 if (filterWasClicked) {
                     val after = regionSignature(bitmap)
-                    val chatEvidence = hasChatHeaderAndFilter(rootInActiveWindow, w, h)
+                    val chatEvidence = hasChatHeaderAndFilter(rootInActiveWindow, w, h) ||
+                        (detectUnreadChip(bitmap) != null && looksLikeChatList(bitmap))
+                    val composer = hasEditableComposer(rootInActiveWindow)
                     bitmap.recycle()
-                    if (after != filterScreenshotBefore && chatEvidence && !hasEditableComposer(rootInActiveWindow)) {
+                    if (after != filterScreenshotBefore && chatEvidence && !composer) {
                         filterVerifiedByChange = true
                         batchPhase = 1
                         logStep("Ungelesen: Filterbereich verändert und Chatansicht vorhanden; fahre vorsichtig fort")
@@ -283,7 +285,8 @@ class SnapAccessibilityService : AccessibilityService() {
                     }
                     return@takeVisualSnapshot
                 }
-                val chatEvidence = safeNode || (looksLikeChatList(bitmap) && !hasEditableComposer(rootInActiveWindow)) ||
+                val screenshotFilter = if (!safeNode) detectUnreadChip(bitmap) else null
+                val chatEvidence = safeNode || screenshotFilter != null || (looksLikeChatList(bitmap) && !hasEditableComposer(rootInActiveWindow)) ||
                     (findNodeWithText(rootInActiveWindow, "My AI") != null &&
                      findNodeWithText(rootInActiveWindow, "Chat") != null && !hasEditableComposer(rootInActiveWindow))
                 if (!chatEvidence) {
@@ -296,16 +299,16 @@ class SnapAccessibilityService : AccessibilityService() {
                     return@takeVisualSnapshot
                 }
                 filterScreenshotBefore = regionSignature(bitmap)
-                filterWasClicked = true
-                if (!safeNode) {
+                if (!safeNode && screenshotFilter == null) {
                     bitmap.recycle()
-                    logStep("Ungelesen-Knoten fehlt oder liegt außerhalb des Filterbereichs: bounds=$bounds")
+                    logStep("Ungelesen: weder Accessibility-Knoten noch visuell plausibler Filterchip gefunden; bounds=$bounds")
                     finishBatch("Ungelesen nicht eindeutig erkannt. Kein automatischer Tipp auf My AI oder Chat.")
                     batchBusy = false
                     return@takeVisualSnapshot
                 }
-                val x = bounds.centerX().toFloat()
-                val y = bounds.centerY().toFloat()
+                val x = if (safeNode) bounds.centerX().toFloat() else screenshotFilter!!.first
+                val y = if (safeNode) bounds.centerY().toFloat() else screenshotFilter!!.second
+                filterWasClicked = true
                 bitmap.recycle()
                 logStep("Filter-Tipp bei (" + x.toInt() + "," + y.toInt() + ")")
                 tap(x, y) {
@@ -524,6 +527,30 @@ class SnapAccessibilityService : AccessibilityService() {
 
     private fun scheduleNext(id: Int, delay: Long) {
         handler.postDelayed({ if (isBatchActive(id)) runManualBatch() }, delay)
+    }
+
+    // Screenshot fallback: inspect only the known upper-left filter strip.
+    // A pill-like region must contain both bright glyphs and dark background.
+    // This does not use the chat-row area and never targets My AI.
+    private fun detectUnreadChip(bitmap: Bitmap): Pair<Float, Float>? {
+        val w = bitmap.width
+        val h = bitmap.height
+        val left = (w * 0.07f).toInt()
+        val right = (w * 0.29f).toInt()
+        val top = (h * 0.145f).toInt()
+        val bottom = (h * 0.195f).toInt()
+        var bright = 0
+        var dark = 0
+        var samples = 0
+        for (y in top until bottom step 4) for (x in left until right step 4) {
+            val p = bitmap.getPixel(x, y)
+            val v = (Color.red(p) + Color.green(p) + Color.blue(p)) / 3
+            if (v > 170) bright++
+            if (v < 105) dark++
+            samples++
+        }
+        if (samples == 0 || bright < samples * 0.025f || dark < samples * 0.25f) return null
+        return w * 0.18f to h * 0.178f
     }
 
     private fun regionSignature(bitmap: Bitmap): Long {
