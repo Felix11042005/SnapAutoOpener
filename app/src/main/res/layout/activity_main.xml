@@ -76,6 +76,13 @@
             android:text="Diagnose kopieren"
             android:layout_marginTop="8dp" />
 
+        <Button
+            android:id="@+id/resetDiagnostic"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Diagnose zurücksetzen"
+            android:layout_marginTop="8dp" />
+
         <TextView
             android:id="@+id/diagnosticReport"
             android:layout_width="match_parent"
