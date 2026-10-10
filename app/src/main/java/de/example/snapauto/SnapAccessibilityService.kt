@@ -35,6 +35,10 @@ class SnapAccessibilityService : AccessibilityService() {
     private var filterScreenshotBefore = 0L
     private var scrollCount = 0
     private var viewerStartedAt = 0L
+    private var viewerAdvanceTotal = 0
+    private var viewerBackAttempts = 0
+    private var viewerBackPending = false
+    private var chatReturnChecks = 0
     private var filterVerifiedByChange = false
     private var filterWaitStartedAt = 0L
     private var filterStableFrames = 0
@@ -210,6 +214,10 @@ class SnapAccessibilityService : AccessibilityService() {
             scrollCount = 0
             trace.clear()
             viewerTaps = 0
+            viewerAdvanceTotal = 0
+            viewerBackAttempts = 0
+            viewerBackPending = false
+            chatReturnChecks = 0
             unchangedViewerFrames = 0
             batchBusy = false
         }
@@ -217,7 +225,11 @@ class SnapAccessibilityService : AccessibilityService() {
             finishBatch("Zeit- oder Versuchslimit erreicht.")
             return
         }
-        if (batchBusy || visualBusy || System.currentTimeMillis() - lastScreenshotAt < 1200L) return
+        if (batchBusy || visualBusy) return
+        if (System.currentTimeMillis() - lastScreenshotAt < 1200L) {
+            scheduleNext(runId, 1250L)
+            return
+        }
         batchBusy = true
         visualBusy = true
         takeVisualSnapshot { bitmap ->
@@ -322,6 +334,9 @@ class SnapAccessibilityService : AccessibilityService() {
                 }
                 batchSeenY.add(target.second)
                 batchPhase = 2
+                viewerBackPending = false
+                viewerBackAttempts = 0
+                chatReturnChecks = 0
                 viewerStartedAt = System.currentTimeMillis()
                 viewerTaps = 0
                 unchangedViewerFrames = 0
@@ -336,40 +351,69 @@ class SnapAccessibilityService : AccessibilityService() {
                 }
                 return@takeVisualSnapshot
             }
-            // Never blindly tap when the chat list is visible.
+            // A video can have static dark areas that resemble chat separators.
+            // Only treat it as the chat list if the chat header AND filter are in
+            // their expected upper-screen bounds.
             val root = rootInActiveWindow
-            val chatListVisible = findNodeWithText(root, "Ungelesen") != null || looksLikeChatList(bitmap)
+            val chatListVisible = hasChatHeaderAndFilter(root, w, h)
             val adVisible = hasAdvertisingMarker(root)
             val signature = visualSignature(bitmap)
             bitmap.recycle()
             if (adVisible) {
-                finishBatch("Werbung erkannt: automatisches Weitertippen aus Sicherheitsgründen gestoppt.")
+                finishBatch("Werbung erkannt: Viewer gestoppt.")
                 batchBusy = false
                 return@takeVisualSnapshot
             }
             if (chatListVisible) {
+                logStep("Chatliste nach Viewer bestätigt; Weiter-Tipps gesamt: $viewerAdvanceTotal")
                 batchPhase = 1
                 batchBusy = false
-                handler.postDelayed({ if (isBatchActive(runId)) runManualBatch() }, 1300L)
+                scheduleNext(runId, 1300L)
+                return@takeVisualSnapshot
+            }
+            if (viewerBackPending) {
+                chatReturnChecks++
+                if (chatReturnChecks >= 3) {
+                    finishBatch("Rücknavigation nicht bestätigt; keine weiteren Gesten.")
+                    batchBusy = false
+                } else {
+                    batchBusy = false
+                    scheduleNext(runId, 1350L)
+                }
                 return@takeVisualSnapshot
             }
             if (lastViewerSignature == signature) unchangedViewerFrames++ else unchangedViewerFrames = 0
             lastViewerSignature = signature
-            if (viewerTaps >= 8 || unchangedViewerFrames >= 2 || System.currentTimeMillis() - viewerStartedAt > 18000L) {
-                prefs.edit().putString("visual_status", "Snap-Serie: Zurück zur Chatliste (max. 8 Weiter-Tipps).").apply()
+            if (viewerTaps >= 8 || System.currentTimeMillis() - viewerStartedAt > 18000L) {
+                viewerBackPending = true
+                viewerBackAttempts++
+                logStep("Viewer-Limit erreicht; BACK $viewerBackAttempts, prüfe Rückkehr")
                 performGlobalAction(GLOBAL_ACTION_BACK)
-                batchPhase = 1
                 batchBusy = false
-                handler.postDelayed({ if (isBatchActive(runId)) runManualBatch() }, 1600L)
+                scheduleNext(runId, 1550L)
                 return@takeVisualSnapshot
             }
             viewerTaps++
-            prefs.edit().putString("visual_status", "Snap-Serie: Weiter-Tipp $viewerTaps/8.").apply()
+            viewerAdvanceTotal++
+            logStep("Viewer-Weiter-Tipp $viewerTaps/8 (gesamt $viewerAdvanceTotal)")
             tap(w * 0.82f, h * 0.53f) {
                 batchBusy = false
-                handler.postDelayed({ if (isBatchActive(runId)) runManualBatch() }, 950L)
+                scheduleNext(runId, 1350L)
             }
         }
+    }
+
+    private fun hasChatHeaderAndFilter(root: AccessibilityNodeInfo?, w: Int, h: Int): Boolean {
+        val chat = findNodeWithText(root, "Chat") ?: return false
+        val unread = findNodeWithText(root, "Ungelesen") ?: return false
+        val chatBounds = Rect()
+        val filterBounds = Rect()
+        chat.getBoundsInScreen(chatBounds)
+        unread.getBoundsInScreen(filterBounds)
+        return !chatBounds.isEmpty && !filterBounds.isEmpty &&
+            chatBounds.centerY() in (h * 0.045f).toInt()..(h * 0.13f).toInt() &&
+            filterBounds.centerY() in (h * 0.10f).toInt()..(h * 0.19f).toInt() &&
+            filterBounds.centerX() in (w * 0.03f).toInt()..(w * 0.30f).toInt()
     }
 
     private fun findNodeWithText(root: AccessibilityNodeInfo?, target: String): AccessibilityNodeInfo? {
@@ -428,14 +472,14 @@ class SnapAccessibilityService : AccessibilityService() {
         trace.add(message)
         if (trace.size > 20) trace.removeAt(0)
         prefs.edit().putString("visual_status", message)
-            .putString("diagnostic_report", "V3.9 Ablauf:\n" + trace.joinToString("\n")).apply()
+            .putString("diagnostic_report", "V4.0 Ablauf:\n" + trace.joinToString("\n")).apply()
     }
 
     private fun finishBatch(reason: String) {
         SnapState.batchMode = false
         prefs.edit()
             .putString("visual_status", "Durchlauf beendet: $reason")
-            .putString("diagnostic_report", "V3.9: $reason\nChat-Öffnungsversuche: ${SnapState.openedInBatch}.\n" + trace.joinToString("\n"))
+            .putString("diagnostic_report", "V4.0: $reason\nChat-Öffnungsversuche: ${SnapState.openedInBatch}; Viewer-Weiter-Tipps: $viewerAdvanceTotal.\n" + trace.joinToString("\n"))
             .apply()
     }
 
