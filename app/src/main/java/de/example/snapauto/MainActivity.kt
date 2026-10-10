@@ -191,9 +191,9 @@ class MainActivity : AppCompatActivity() {
             startedAt > 0 && diagnosticAge > 30_000 && snapEvents == 0 ->
                 "ERGEBNIS: Service läuft, aber es kam KEIN Snapchat-Accessibility-Event an."
             screenshotOk ->
-                "ERGEBNIS: V4.7 Screenshot-Zugriff funktioniert."
+                "ERGEBNIS: V4.8 Screenshot-Zugriff funktioniert."
             snapEvents > 0 ->
-                "ERGEBNIS: Snapchat-Events kommen an. V4.7 wartet auf Screenshot-Diagnose."
+                "ERGEBNIS: Snapchat-Events kommen an. V4.8 wartet auf Screenshot-Diagnose."
             else -> "ERGEBNIS: Service läuft. Diagnose starten und Snapchat-Chatliste öffnen."
         }
 
@@ -208,7 +208,7 @@ class MainActivity : AppCompatActivity() {
             appendLine("Screenshot: ${if (screenshotOk) "JA" else "NEIN"}")
             appendLine("Visuelle Kandidaten: $visualCandidates")
             appendLine("Visuell geöffnet: $visualOpened")
-            append("V4.7-Status: $visualStatus")
+            append("V4.8-Status: $visualStatus")
         }
 
         findViewById<TextView>(R.id.diagnosticReport).text = report
