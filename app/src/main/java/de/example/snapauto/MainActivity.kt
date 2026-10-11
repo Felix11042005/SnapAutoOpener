@@ -132,7 +132,7 @@ class MainActivity : AppCompatActivity() {
                 .putString("diagnostic_report", "Manueller Durchlauf gestartet. Filter muss bestätigt werden; maximal 10 Chat-Versuche und 120 Sekunden.")
                 .putInt("visual_opened", 0)
                 .apply()
-            Toast.makeText(this, "Jetzt Snapchat im vertraulichen Profil öffnen. Maximal 10 Versuche.", Toast.LENGTH_LONG).show()
+            openSnapchatAfterStart()
         }
 
         findViewById<Button>(R.id.stopBatch).setOnClickListener {
@@ -212,6 +212,43 @@ class MainActivity : AppCompatActivity() {
         }
 
         findViewById<TextView>(R.id.diagnosticReport).text = report
+    }
+
+    private fun openSnapchatAfterStart() {
+        val launchIntent = packageManager.getLaunchIntentForPackage(snapchatPackage)
+        if (launchIntent == null) {
+            SnapState.batchMode = false
+            SnapState.batchStopRequested = true
+            getSharedPreferences("snapauto_diag", MODE_PRIVATE).edit()
+                .putString("diagnostic_report",
+                    "Snapchat kann aus diesem Android-Profil nicht gestartet werden. " +
+                    "Auch ein entsperrtes vertrauliches Profil ist für normale Apps " +
+                    "im Hauptprofil nicht direkt zugänglich. Installieren Sie " +
+                    "SnapAutoOpener zusätzlich im vertraulichen Profil.")
+                .apply()
+            Toast.makeText(this,
+                "Snapchat nicht direkt erreichbar. SnapAutoOpener muss im selben Profil installiert sein.",
+                Toast.LENGTH_LONG).show()
+            return
+        }
+        try {
+            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(launchIntent)
+            getSharedPreferences("snapauto_diag", MODE_PRIVATE).edit()
+                .putString("visual_status", "Snapchat-Start angefordert; Bildschirm wird geprüft.")
+                .apply()
+        } catch (e: Exception) {
+            SnapState.batchMode = false
+            SnapState.batchStopRequested = true
+            getSharedPreferences("snapauto_diag", MODE_PRIVATE).edit()
+                .putString("diagnostic_report",
+                    "Android hat den Snapchat-Start blockiert: " +
+                    (e.message ?: e.javaClass.simpleName) +
+                    ". Bitte beide Apps im selben entsperrten Profil verwenden.")
+                .apply()
+            Toast.makeText(this, "Android blockiert den profilübergreifenden Start.",
+                Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun updateProfileStatus(showToast: Boolean) {
