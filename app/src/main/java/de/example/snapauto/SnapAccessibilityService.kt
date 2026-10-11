@@ -29,10 +29,16 @@ class SnapAccessibilityService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor()
     private val session = DiagnosticSession()
-    private val log = DiagnosticLog()
+    private val log = DiagnosticLog(160)
     private val stability = StableObservation()
     private val existingSelection = ExistingSnapSelection()
     private val visualConfirmation = VisualConfirmationTracker()
+    private val batch = ExistingSnapBatch()
+    private var batchMode = false
+    private var batchDeadline = 0L
+    private var returnFlow: ReturnAfterOpen? = null
+    private var totalAttempts = 0
+    private var totalAccepted = 0
     private var started = 0L
     private var lastSample = -10_000L
     private var frameEpoch = 0L
@@ -44,13 +50,15 @@ class SnapAccessibilityService : AccessibilityService() {
         private set
     val running get() = session.running
     val report get() = "SnapAutoOpener ${BuildConfig.VERSION_NAME}\nAndroid API ${Build.VERSION.SDK_INT}\n" +
-        "Modus: ${if (session.mode == SessionMode.INTERACTIVE) "EINEN SNAP ÖFFNEN" else "DIAGNOSE"}; " +
-        "Klickversuche: ${session.actionAttempts}; angenommene Klicks: ${session.acceptedClicks}\n" +
+        "Modus: ${if (batchMode) "SICHTBAREN BESTAND ÖFFNEN" else if (session.mode == SessionMode.INTERACTIVE) "EINEN SNAP ÖFFNEN" else "DIAGNOSE"}; " +
+        "Klickversuche: ${if (batchMode) totalAttempts else session.actionAttempts}; " +
+        "angenommene Klicks: ${if (batchMode) totalAccepted else session.acceptedClicks}\n" +
         "Ob ein Snap angezeigt wird, muss am Gerät geprüft werden.\nProfilidentität: nicht bestimmt\n" +
         "$status\n\n${log.render()}"
 
     private data class Capture(val token: Long, val epoch: Long, val time: Long, val snapshot: UiSnapshot)
-    private data class ImageAnalysis(val detail: String, val target: VisualIcon? = null)
+    private data class ImageAnalysis(val detail: String, val target: VisualIcon? = null,
+        val targets: List<VisualIcon> = emptyList())
     private val actions by lazy {
         AndroidActionExecutor(this, handler, session, ::actionSnapshot) { record("ACTION", it) }
     }
@@ -64,8 +72,15 @@ class SnapAccessibilityService : AccessibilityService() {
 
     fun startSingleSnap() = startSession(SessionMode.INTERACTIVE)
 
-    private fun startSession(mode: SessionMode) {
+    fun startExistingSnaps() = startSession(SessionMode.INTERACTIVE, batchMode = true)
+
+    private fun startSession(mode: SessionMode, batchMode: Boolean = false) {
         stopDiagnostic("Neuer manueller Start", save = false)
+        this.batchMode = batchMode
+        batchDeadline = 0L
+        returnFlow = null
+        totalAttempts = 0
+        totalAccepted = 0
         log.clear()
         started = SystemClock.elapsedRealtime()
         session.start(started, mode = mode)
@@ -108,6 +123,11 @@ class SnapAccessibilityService : AccessibilityService() {
         // The actual opening session begins at the in-Snapchat START, not when
         // the user is still choosing the app/profile. No future target discovery.
         session.start(now, mode = SessionMode.INTERACTIVE)
+        if (batchMode) {
+            batch.reset(snap)
+            batchDeadline = now + 120_000
+            record("BATCH_START", "Höchstens 10 beim START sichtbare eindeutige Zeilen; 5 Sekunden Wartezeit vor einmal Zurück; 120 Sekunden Gesamtlaufzeit. Keine Snap-ID-Garantie.")
+        }
         stability.reset()
         stability.observe(snap)
         visualConfirmation.reset()
@@ -117,6 +137,7 @@ class SnapAccessibilityService : AccessibilityService() {
     fun stopDiagnostic(reason: String = "STOP durch Nutzer", save: Boolean = true) {
         val wasRunning = session.running
         session.stop()
+        returnFlow = null
         pending = null
         frameEpoch++
         stability.reset()
@@ -142,7 +163,9 @@ class SnapAccessibilityService : AccessibilityService() {
             val power = getSystemService(PowerManager::class.java)
             val keyguard = getSystemService(KeyguardManager::class.java)
             when {
-                session.expired(now) -> { stopDiagnostic("30-Sekunden-Timeout"); return }
+                batchMode && batchDeadline > 0 && now >= batchDeadline -> { stopDiagnostic("120-Sekunden-Gesamtlimit"); return }
+                session.expired(now) -> { stopDiagnostic(if (batchMode && batchDeadline > 0)
+                    "Öffnungs-/Rückkehrfrist abgelaufen." else "30-Sekunden-Timeout"); return }
                 !power.isInteractive || keyguard.isKeyguardLocked -> { stopDiagnostic("Bildschirm gesperrt/aus"); return }
                 pending?.let { now - it.time >= 5_000 } == true -> { stopDiagnostic("Screenshot-Timeout"); return }
             }
@@ -197,8 +220,60 @@ class SnapAccessibilityService : AccessibilityService() {
         val stable = stability.observe(snap)
         val description = RecognitionReport.describe(snap, evidence, stable)
         recordOnce(evidence.reason, description)
+        var imageRows = evidence.rows
         if (session.mode == SessionMode.INTERACTIVE) {
             if (existingSelection.initial == null) return
+            if (batchMode) {
+                if (!batch.sameWindow(snap)) { stopDiagnostic("Bestandsfenster geändert."); return }
+                val flow = returnFlow
+                if (flow != null) {
+                    val decision = flow.poll(snap, SystemClock.elapsedRealtime(), stable)
+                    recordOnce(decision.reason, "Rückkehrphase: ${decision.step}; keine Viewer-Tipps oder Viewer-Aufnahmen.")
+                    when (decision.step) {
+                        ReturnStep.STOP -> stopDiagnostic("Rückkehr beendet: ${decision.reason}")
+                        ReturnStep.BACK -> {
+                            val accepted = actions.returnToList(session.generation, snap, flow)
+                            record("BACK_RESULT", "angenommen=$accepted; Chatliste noch zu bestätigen")
+                            if (!accepted) stopDiagnostic("Zurück nicht angenommen; kein Ersatzversuch.")
+                        }
+                        ReturnStep.LIST_READY -> {
+                            record("LIST_RETURNED", "Chatliste wiederholt erkannt; verbliebene Startziele=${batch.remainingCount}; übersprungen=${batch.skipped}")
+                            returnFlow = null
+                            if (batch.next(snap, evidence) == null) { finishBatch(); return }
+                            val cycleStart = SystemClock.elapsedRealtime()
+                            val duration = minOf(30_000, batchDeadline - cycleStart)
+                            if (duration <= 0) { stopDiagnostic("120-Sekunden-Gesamtlimit"); return }
+                            session.start(cycleStart, duration, SessionMode.INTERACTIVE)
+                            visualConfirmation.reset()
+                            stability.reset()
+                            frameEpoch++
+                            status = "Chatliste bestätigt; prüfe nächstes ursprüngliches Ziel."
+                        }
+                        ReturnStep.WAIT -> Unit
+                    }
+                    return
+                }
+                if (session.actionAttempts > 0) return
+                if (!batch.frozen && !existingSelection.unchanged(snap)) {
+                    stopDiagnostic("Liste vor visueller Bestandserfassung verändert; keine späteren Ziele aufgenommen."); return
+                }
+                if (evidence.screen == ScreenKind.BLOCKED) { stopDiagnostic("Sicherheitsstopp: ${evidence.reason}"); return }
+                if (!stable) return
+                if (Build.VERSION.SDK_INT < 34 && !batch.frozen) {
+                    if (!batch.freeze(snap, existingSelection.controls.mapNotNull { control ->
+                            evidence.rows.singleOrNull { it.contains(control.bounds) } })) {
+                        stopDiagnostic("Kein eindeutiger nativer Startbestand; Bilder benötigen Android 14."); return
+                    }
+                }
+                if (batch.frozen) {
+                    if (evidence.screen != ScreenKind.CHAT_LIST) { stopDiagnostic("Chatliste vor nächstem Öffnen nicht bestätigt."); return }
+                    val row = batch.next(snap, evidence)
+                    if (row == null) { finishBatch(); return }
+                    val native = ScreenRecognizer.directSnapControls(snap, evidence).firstOrNull { row.contains(it.bounds) }
+                    if (native != null) { openNative(snap, native); return }
+                    imageRows = listOf(row)
+                }
+            } else {
             if (session.actionAttempts > 0) return // Await completion; never capture a Snap viewer.
             if (evidence.screen == ScreenKind.BLOCKED) {
                 stopDiagnostic("Sicherheitsstopp: ${evidence.reason}")
@@ -211,13 +286,9 @@ class SnapAccessibilityService : AccessibilityService() {
             if (!stable) return
             val target = existingSelection.controls.firstOrNull()
             if (target != null) {
-                val request = ActionRequest(ActionKind.OPEN_SNAP, snap, target.bounds, target.index)
-                val result = actions.openSnapOnce(session.generation, request)
-                record("OPEN_RESULT", "${result.reason}; versucht=${result.attempted}; angenommen=${result.accepted}")
-                stopDiagnostic(if (result.accepted)
-                    "Öffnungsklick angenommen. Lauf beendet; bitte prüfen, ob ein Snap angezeigt wird."
-                    else "Öffnungsversuch beendet: ${result.reason}")
+                openNative(snap, target)
                 return
+            }
             }
             // No native click capability: only a separately verified visual icon may authorize a tap.
         }
@@ -244,7 +315,7 @@ class SnapAccessibilityService : AccessibilityService() {
                             finally { hardware?.recycle() }
                         if (bitmap == null) { captureFailure(capture, "BITMAP_UNAVAILABLE"); return }
                         worker.execute {
-                            val analysis = try { analyze(bitmap, snap, evidence.rows) }
+                            val analysis = try { analyze(bitmap, snap, imageRows) }
                                 catch (_: RuntimeException) { ImageAnalysis("IMAGE_ANALYSIS_FAILED") }
                                 finally { bitmap.recycle() }
                             handler.post {
@@ -252,7 +323,7 @@ class SnapAccessibilityService : AccessibilityService() {
                                     pending = null
                                     failures = 0
                                     record("VISUAL_HINT", analysis.detail)
-                                    if (session.mode == SessionMode.INTERACTIVE) processVisual(capture, analysis.target)
+                                    if (session.mode == SessionMode.INTERACTIVE) processVisual(capture, analysis)
                                 } else finishStale(capture)
                             }
                         }
@@ -265,7 +336,24 @@ class SnapAccessibilityService : AccessibilityService() {
         } catch (_: RuntimeException) { captureFailure(capture, "SCREENSHOT_REQUEST_FAILED") }
     }
 
-    private fun processVisual(capture: Capture, target: VisualIcon?) {
+    private fun processVisual(capture: Capture, analysis: ImageAnalysis) {
+        var target = analysis.target
+        if (batchMode) {
+            val evidence = ScreenRecognizer.inspect(capture.snapshot)
+            if (!batch.frozen) {
+                val nativeRows = existingSelection.controls.mapNotNull { control ->
+                    evidence.rows.singleOrNull { it.contains(control.bounds) } }
+                if (!batch.freeze(capture.snapshot, analysis.targets.map { it.row } + nativeRows)) {
+                    stopDiagnostic("Kein eindeutig wiedererkennbarer sichtbarer Startbestand; keine Aktion."); return
+                }
+                record("BATCH_FROZEN", "Eindeutige ursprüngliche Zeilen=${batch.initialCount}; keine späteren Ziele ergänzen.")
+            }
+            val row = batch.next(capture.snapshot, evidence)
+            if (row == null) { finishBatch(); return }
+            val native = ScreenRecognizer.directSnapControls(capture.snapshot, evidence).firstOrNull { row.contains(it.bounds) }
+            if (native != null) { openNative(capture.snapshot, native); return }
+            target = analysis.targets.singleOrNull { it.row == row }
+        }
         val confirmation = visualConfirmation.observe(capture.token, capture.snapshot, target, capture.time)
         record("VISUAL_CONFIRMATION", confirmation.reason)
         val proof = confirmation.proof
@@ -276,20 +364,53 @@ class SnapAccessibilityService : AccessibilityService() {
         val request = ActionRequest(ActionKind.OPEN_SNAP, capture.snapshot, proof.target.icon, visual = proof)
         val result = actions.openVisualOnce(capture.token, request) { completed ->
             record("TAP_COMPLETION", "abgeschlossen=$completed; kein Nachweis einer Snap-Öffnung")
-            stopDiagnostic(if (completed) "Ein Symbol-Tipp ausgeführt. Bitte prüfen, ob ein Snap angezeigt wird."
-                else "Symbol-Tipp von Android abgebrochen.")
+            if (!completed) stopDiagnostic("Symbol-Tipp von Android abgebrochen.")
+            else afterOpening(capture.snapshot)
         }
         record("OPEN_RESULT", "${result.reason}; versucht=${result.attempted}; angenommen=${result.accepted}")
+        accountBatch(result, capture.snapshot, proof.target.row)
+        if (!session.running) return
         if (!result.accepted) {
             stopDiagnostic("Visueller Öffnungsversuch beendet: ${result.reason}")
         } else {
             status = "Ein Symbol-Tipp angenommen; warte auf Abschluss."
             handler.postDelayed({
-                if (session.accepts(capture.token, SystemClock.elapsedRealtime()))
+                if (session.accepts(capture.token, SystemClock.elapsedRealtime()) && returnFlow == null)
                     stopDiagnostic("Tipp-Abschluss nicht bestätigt; kein weiterer Versuch.")
             }, 2_000)
         }
     }
+
+    private fun openNative(snap: UiSnapshot, target: UiNode) {
+        val row = ScreenRecognizer.inspect(snap).rows.singleOrNull { it.contains(target.bounds) }
+        if (batchMode && row == null) { stopDiagnostic("Natives Ziel hat keine eindeutige Bestandszeile."); return }
+        val result = actions.openSnapOnce(session.generation,
+            ActionRequest(ActionKind.OPEN_SNAP, snap, target.bounds, target.index))
+        record("OPEN_RESULT", "${result.reason}; versucht=${result.attempted}; angenommen=${result.accepted}")
+        if (row != null) accountBatch(result, snap, row)
+        if (!result.accepted) stopDiagnostic("Öffnungsversuch beendet: ${result.reason}")
+        else if (session.running) afterOpening(snap)
+    }
+
+    private fun accountBatch(result: OpenResult, snap: UiSnapshot, row: Box) {
+        if (!batchMode) return
+        if (result.attempted) totalAttempts++
+        if (result.accepted) {
+            totalAccepted++
+            if (!batch.consume(snap, row)) stopDiagnostic("Startziel nicht mehr zugeordnet; Lauf beendet.")
+        }
+    }
+
+    private fun afterOpening(before: UiSnapshot) {
+        if (!session.running) return
+        if (!batchMode) { stopDiagnostic("Ein Öffnungsversuch ausgeführt. Bitte prüfen, ob ein Snap angezeigt wird."); return }
+        returnFlow = ReturnAfterOpen(before, SystemClock.elapsedRealtime())
+        stability.reset()
+        status = "Öffnungsversuch abgeschlossen; warte 5 Sekunden, danach einmal Zurück zur Chatliste."
+        record("RETURN_ARMED", "Kontextbezogene Rückkehr nach abgeschlossener Öffnungsaktion; kein behaupteter Viewer-Nachweis.")
+    }
+
+    private fun finishBatch() = stopDiagnostic("Sichtbarer Startbestand beendet: $totalAccepted angenommene Öffnungen; ${batch.skipped} veränderte/fehlende Ziele übersprungen.")
 
     private fun actionSnapshot(): UiSnapshot? {
         if (connected !== this || !getSystemService(PowerManager::class.java).isInteractive ||
@@ -350,8 +471,8 @@ class SnapAccessibilityService : AccessibilityService() {
                 val y = (c.bounds.top + c.bounds.bottom) / 2f / sy + bounds.top
                 "(${x.roundToInt()},${y.roundToInt()})"
             }
-            val icon = VisualSnapTarget.detect(pixels, scaled.width, scaled.height, regions, resources.displayMetrics.density * sx)
-            val mapped = icon?.let { target ->
+            val icons = VisualSnapTarget.detectAll(pixels, scaled.width, scaled.height, regions, resources.displayMetrics.density * sx)
+            val mapped = icons.map { target ->
                 val row = rows[regions.indexOf(target.row)]
                 val b = target.icon
                 target.copy(row = row, icon = Box((b.left / sx + bounds.left).roundToInt(),
@@ -359,7 +480,7 @@ class SnapAccessibilityService : AccessibilityService() {
                     (b.bottom / sy + bounds.top).roundToInt()))
             }
             return ImageAnalysis("Fenster=${bitmap.width}x${bitmap.height}; Farbhinweise=${candidates.size}; Bildschirmpositionen=$positions; " +
-                "eindeutiges gefülltes Snap-Symbol=${mapped != null}. Farbhilfe allein beweist keinen Snap.", mapped)
+                "eindeutige gefüllte Snap-Symbole=${mapped.size}. Farbhilfe allein beweist keinen Snap.", mapped.firstOrNull(), mapped)
         } finally { if (scaled !== bitmap) scaled.recycle() }
     }
 
@@ -383,7 +504,8 @@ class SnapAccessibilityService : AccessibilityService() {
             orientation = LinearLayout.HORIZONTAL
             if (session.mode == SessionMode.INTERACTIVE) addView(Button(this@SnapAccessibilityService).apply {
                 text = "START"
-                contentDescription = "Sichtbaren Bestand erfassen und einen vorhandenen Snap öffnen"
+                contentDescription = if (batchMode) "Sichtbaren Startbestand erfassen und nacheinander öffnen"
+                    else "Sichtbaren Bestand erfassen und einen vorhandenen Snap öffnen"
                 setOnClickListener { isEnabled = false; captureExistingForOpening() }
             })
             addView(button)

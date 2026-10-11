@@ -32,6 +32,14 @@ class AndroidActionExecutor(
 
     fun openSnapOnce(token: Long, request: ActionRequest): OpenResult = opener.open(token, request)
 
+    /** Separate recovery capability: never a viewer click or an unrestricted BACK. */
+    fun returnToList(token: Long, expected: UiSnapshot, flow: ReturnAfterOpen): Boolean {
+        if (inFlight) return false
+        return ReturnToList(session, SystemClock::elapsedRealtime, currentSnapshot, SnapBackPort { authorize ->
+            if (!authorize()) false else service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+        }).execute(token, expected, flow).accepted
+    }
+
     fun openVisualOnce(token: Long, request: ActionRequest, completed: (Boolean) -> Unit): OpenResult {
         if (inFlight) return OpenResult(false, false, "ACTION_IN_FLIGHT")
         return VisualSnapOpener(session, SystemClock::elapsedRealtime, currentSnapshot,

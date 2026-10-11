@@ -1,4 +1,6 @@
-# Öffnungsmodus 5.5 – Stand und Pixel-Prüfung
+# Einzelöffnungsmodus – Stand und Pixel-Prüfung
+
+5.6 ergänzt den separat wählbaren [sichtbaren Bestandslauf](VISIBLE_BATCH.md) mit Wartezeit, einmaliger kontextbezogener Zurück-Aktion und bestätigter Listenrückkehr vor dem nächsten ursprünglichen Ziel. Der folgende Abschnitt beschreibt weiterhin den Einzelmodus. Ein erfolgreicher einzelner Snap wurde mit 5.5 vom Nutzer bestätigt; der neue Gesamtablauf ist damit noch nicht am Gerät geprüft.
 
 ## Tatsächlich implementiert
 
@@ -14,7 +16,7 @@ Farbe und Form sind keine eindeutige Identität. Eine gleich geformte Dekoration
 
 ## Noch offen: gesamter vorhandener Bestand
 
-Das Ziel bleibt, bereits vorhandene ungeöffnete Snaps zu bearbeiten. Diese Version liefert einen echten Öffnungsversuch; eine automatische Schleife mit Weiter/Zurück und Scrollen ist noch nicht freigegeben. Eine zuverlässige Viewer-Erkennung und Rückkehr sowie stabile Identitäten einzelner Snaps fehlen.
+Der Einzelmodus liefert einen echten Öffnungsversuch. Der neue sichtbare Bestandsmodus ergänzt Zurück und nächste ursprüngliche Zeile; Weiter-Tipps innerhalb eines Viewers, Scrollen zu ungesehenen Beständen, positive Viewer-Erkennung und stabile Identitäten einzelner Snaps fehlen weiterhin. Die Rücknavigation ist kontextbezogene Wiederherstellung, kein Snap-Nachweis. Details und Grenzen: [VISIBLE_BATCH.md](VISIBLE_BATCH.md).
 
 Ein eingefrorener Accessibility-Baum ist keine serverseitige Liste einzelner Snap-IDs. Neue Inhalte derselben Unterhaltung können ohne unterscheidbare Informationen erscheinen. Deshalb ist keine strikte Alt/Neu-Trennung einzelner Snaps zugesichert. Snapchat beschreibt außerdem, dass [mehrere empfangene Snaps automatisch in Reihenfolge abgespielt werden](https://help.snapchat.com/hc/en-us/articles/7012316500372-How-do-I-view-Snaps). Ein Tipp garantiert daher nicht, dass nur ein Snap sichtbar wird. Die App überwacht keine eingehenden Nachrichten im Hintergrund.
 

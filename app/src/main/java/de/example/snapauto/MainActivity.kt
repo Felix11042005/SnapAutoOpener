@@ -40,6 +40,10 @@ class MainActivity : AppCompatActivity() {
             SnapAccessibilityService.connected?.startSingleSnap()
             render()
         }
+        findViewById<Button>(R.id.startExistingSnaps).setOnClickListener {
+            SnapAccessibilityService.connected?.startExistingSnaps()
+            render()
+        }
         findViewById<Button>(R.id.stopDiagnostic).setOnClickListener {
             SnapAccessibilityService.connected?.stopDiagnostic()
             render()
@@ -62,6 +66,7 @@ class MainActivity : AppCompatActivity() {
         val service = SnapAccessibilityService.connected
         findViewById<Button>(R.id.startDiagnostic).isEnabled = service != null && !service.running
         findViewById<Button>(R.id.startSingleSnap).isEnabled = service != null && !service.running
+        findViewById<Button>(R.id.startExistingSnaps).isEnabled = service != null && !service.running
         findViewById<Button>(R.id.stopDiagnostic).isEnabled = service?.running == true
         findViewById<TextView>(R.id.serviceStatus).text = if (service == null)
             "Bedienungshilfe nicht verbunden. START ist gesperrt." else service.status
