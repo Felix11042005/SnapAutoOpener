@@ -1,10 +1,12 @@
 # SnapAutoOpener
 
-Kotlin Android app, currently **5.2.1-safe-diagnostics** (versionCode 29).
+Kotlin Android app, currently **5.3-single-snap** (versionCode 30).
 
-This iteration is a manually started, 30-second diagnostic tool. START does not launch a guessed Snapchat profile. Open the intended app instance yourself. STOP is available in the activity and as an accessibility overlay. Notifications never start anything.
+Two explicit modes are available: diagnostics without interactions, and **START – einen Snap öffnen**, which attempts one real native `ACTION_CLICK` on an exact, directly clickable unopened-Snap status. Open the intended Snapchat instance yourself within 30 seconds. STOP is available in the activity and as an accessibility overlay. Notifications never start anything.
 
-Interaction functions (tap, swipe, Back) remain in `AndroidActionExecutor`, as requested. All pass through `ActionPolicy`; diagnostic sessions cannot execute them. The UI currently exposes diagnostics only. Opening a Snap and advancing/backing out of its viewer also require evidence not implemented yet and remain blocked. This is not yet a reliable automatic Snap opener.
+The first complete recognized visible chat list defines the initial selection. Later targets are never added; any change to that snapshot before clicking ends the attempt. The mode requires two identical observations and a fresh matching snapshot immediately before the native click. A clickable conversation row is insufficient: the Snap status itself must expose `ACTION_CLICK`. No coordinate tap or ancestor-click fallback is used. An empty initial selection ends immediately. The attempt stops after one click, including a rejected click or exception; it never retries another target.
+
+**This is an actual opening attempt, but not yet automatic batch processing.** Android accepting a click does not prove that Snapchat displayed a Snap. Viewer recognition, automatic advance/return, scrolling to unseen existing Snaps and individual Snap identifiers are not implemented. Snapchat can change content without exposing distinct Snap IDs; strict separation of old and newly arriving Snaps within a conversation is not established. These limits must be resolved before enabling a batch loop. Existing tap/swipe/Back functions remain isolated and gated in `AndroidActionExecutor`; the new mode does not call them.
 
 ## Read first
 
@@ -19,9 +21,9 @@ An unlocked private profile remains separate. Normal main-profile PackageManager
 
 ## Recognition and privacy
 
-Bounded accessibility snapshots feed a pure Kotlin recognizer. Exact visible DE/EN labels, selected state, list structure and element bounds replace fixed screen strips. Two stable observations are required. Missing semantics stays unknown. Editable fields block capture. In a verified list, My AI and advertising rows are excluded individually from image analysis; an exclusion without a clear row still blocks capture. Interaction gates remain conservative for the entire screen. Colored connected components in semantic rows are only hints; they never authorize clicks.
+Bounded accessibility snapshots feed a pure Kotlin recognizer. Exact visible DE/EN labels, list structure and relative element bounds replace fixed screen strips. The title is resolved before the filter or Snap statuses, ignoring a bottom navigation label. A direct Snap status action does not require the unread filter; diagnostic image analysis and retained scrolling still require its selected state. Missing or incomplete semantics stays unknown. Editable fields block actions and capture. My AI and advertising rows are excluded individually; an exclusion without a clear row blocks actions and capture. Colored connected components are only hints and never authorize clicks.
 
-5.2.1 fixes the overly broad `AD_OR_MY_AI` diagnostic block observed in the first device report. Reports now distinguish unexamined rows from zero candidates and show aggregate header/filter/list evidence, node-limit and missing-child counts. No contact names or UI text are logged. See [diagnostic findings](docs/DIAGNOSTIC_FINDINGS.md).
+Reports distinguish recognized statuses, direct click controls, attempted clicks and accepted clicks. They never report accepted clicks as opened Snaps. No contact names or UI text are logged. See [diagnostic findings](docs/DIAGNOSTIC_FINDINGS.md).
 
 On Android 14+, optional analysis uses screenshots of the identified window only. Older systems retain tree diagnostics. Screenshot failures are not bypassed. Pixel analysis runs on a worker; late results are discarded after STOP, navigation, restart or timeout. Images and raw node labels are never persisted. Only bounded diagnostic codes/counts/positions are saved locally; copying is explicit. No credentials, private Snapchat APIs, network permission, root or hooks.
 

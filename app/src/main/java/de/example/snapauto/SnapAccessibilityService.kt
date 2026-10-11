@@ -29,6 +29,7 @@ class SnapAccessibilityService : AccessibilityService() {
     private val session = DiagnosticSession()
     private val log = DiagnosticLog()
     private val stability = StableObservation()
+    private val existingSelection = ExistingSnapSelection()
     private var started = 0L
     private var lastSample = -10_000L
     private var frameEpoch = 0L
@@ -40,13 +41,14 @@ class SnapAccessibilityService : AccessibilityService() {
         private set
     val running get() = session.running
     val report get() = "SnapAutoOpener ${BuildConfig.VERSION_NAME}\nAndroid API ${Build.VERSION.SDK_INT}\n" +
-        "Modus: DIAGNOSE; ausgeführte Bedienaktionen: 0\nProfilidentität: nicht bestimmt\n" +
+        "Modus: ${if (session.mode == SessionMode.INTERACTIVE) "EINEN SNAP ÖFFNEN" else "DIAGNOSE"}; " +
+        "Klickversuche: ${session.actionAttempts}; angenommene Klicks: ${session.acceptedClicks}\n" +
+        "Ob ein Snap angezeigt wird, muss am Gerät geprüft werden.\nProfilidentität: nicht bestimmt\n" +
         "$status\n\n${log.render()}"
 
     private data class Capture(val token: Long, val epoch: Long, val time: Long, val snapshot: UiSnapshot)
-    @Suppress("unused")
     private val actions by lazy {
-        AndroidActionExecutor(this, handler, session, ::snapshot) { record("ACTION", it) }
+        AndroidActionExecutor(this, handler, session, ::actionSnapshot) { record("ACTION", it) }
     }
 
     override fun onServiceConnected() {
@@ -54,18 +56,25 @@ class SnapAccessibilityService : AccessibilityService() {
         connected = this
     }
 
-    fun startDiagnostic() {
+    fun startDiagnostic() = startSession(SessionMode.DIAGNOSTIC)
+
+    fun startSingleSnap() = startSession(SessionMode.INTERACTIVE)
+
+    private fun startSession(mode: SessionMode) {
         stopDiagnostic("Neuer manueller Start", save = false)
         log.clear()
         started = SystemClock.elapsedRealtime()
-        session.start(started) // Deliberately DIAGNOSTIC; no automatic interaction release.
+        session.start(started, mode = mode)
+        existingSelection.reset()
         lastSample = -10_000L
         failures = 0
         lastCode = ""
         status = "30 Sekunden: gewünschte Snapchat-Instanz manuell öffnen."
-        record("START", "Warte auf sichtbare Chatliste; keine automatische App-Auswahl.")
+        record("START", if (mode == SessionMode.INTERACTIVE)
+            "Echter Öffnungsmodus: maximal ein direkter Snap-Statusklick. Gewünschte Chatliste manuell öffnen."
+            else "Diagnose: keine Bedienaktionen. Gewünschte Chatliste manuell öffnen.")
         if (!showStopOverlay()) {
-            stopDiagnostic("STOP-Overlay nicht verfügbar; Diagnose nicht gestartet.")
+            stopDiagnostic("STOP-Overlay nicht verfügbar; Lauf nicht gestartet.")
             return
         }
         handler.post(tick)
@@ -149,6 +158,36 @@ class SnapAccessibilityService : AccessibilityService() {
         val stable = stability.observe(snap)
         val description = RecognitionReport.describe(snap, evidence, stable)
         recordOnce(evidence.reason, description)
+        if (session.mode == SessionMode.INTERACTIVE) {
+            if (evidence.screen == ScreenKind.BLOCKED) {
+                stopDiagnostic("Sicherheitsstopp: ${evidence.reason}")
+                return
+            }
+            if (existingSelection.capture(snap, evidence)) {
+                record("INITIAL_SELECTION", "Erster erkannter sichtbarer Bestand: ${existingSelection.controls.size} direkte Snap-Klickziele. Keine späteren Ziele aufnehmen.")
+                if (existingSelection.controls.isEmpty()) {
+                    stopDiagnostic("Bestand ohne direkt anklickbaren Snap-Status; kein Klick ausgeführt.")
+                    return
+                }
+            }
+            if (existingSelection.initial != null && !existingSelection.unchanged(snap)) {
+                stopDiagnostic("Liste seit Bestandserfassung verändert; keine neuen Ziele aufgenommen.")
+                return
+            }
+            if (!stable) return
+            val target = existingSelection.controls.firstOrNull()
+            if (target == null) {
+                recordOnce("OPEN_WAIT", "Kein direkt anklickbarer neuer Snap erkannt; warte bis zum Zeitlimit.")
+                return
+            }
+            val request = ActionRequest(ActionKind.OPEN_SNAP, snap, target.bounds, target.index)
+            val result = actions.openSnapOnce(session.generation, request)
+            record("OPEN_RESULT", "${result.reason}; versucht=${result.attempted}; angenommen=${result.accepted}")
+            stopDiagnostic(if (result.accepted)
+                "Öffnungsklick angenommen. Lauf beendet; bitte prüfen, ob ein Snap angezeigt wird."
+                else "Öffnungsversuch beendet: ${result.reason}")
+            return
+        }
         if (!stable || evidence.screen != ScreenKind.CHAT_LIST || evidence.filter != FilterState.SELECTED || evidence.rows.isEmpty()) return
         if (Build.VERSION.SDK_INT < 34) {
             recordOnce("WINDOW_SCREENSHOT_UNAVAILABLE", "Bilddiagnose benötigt Android 14; Baumdiagnose bleibt verfügbar.")
@@ -185,6 +224,12 @@ class SnapAccessibilityService : AccessibilityService() {
                 override fun onFailure(errorCode: Int) = captureFailure(capture, "SCREENSHOT_ERROR_$errorCode")
             })
         } catch (_: RuntimeException) { captureFailure(capture, "SCREENSHOT_REQUEST_FAILED") }
+    }
+
+    private fun actionSnapshot(): UiSnapshot? {
+        if (connected !== this || !getSystemService(PowerManager::class.java).isInteractive ||
+            getSystemService(KeyguardManager::class.java).isKeyguardLocked) return null
+        return snapshot()
     }
 
     private fun valid(capture: Capture) = connected === this && pending === capture &&
@@ -247,8 +292,8 @@ class SnapAccessibilityService : AccessibilityService() {
 
     private fun showStopOverlay(): Boolean {
         val button = Button(this).apply {
-            text = "STOP Diagnose"
-            contentDescription = "Diagnose sofort stoppen"
+            text = "STOP"
+            contentDescription = "Lauf sofort stoppen"
             setOnClickListener { stopDiagnostic() }
         }
         val params = WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT,

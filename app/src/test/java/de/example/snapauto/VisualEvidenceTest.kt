@@ -39,7 +39,7 @@ class VisualEvidenceTest {
         assertEquals(1, detect(image(60, 50)).size)
         val s = DiagnosticSession(); val token = s.start(0, mode = SessionMode.INTERACTIVE)
         val snapshot = chatFixture()
-        assertEquals("UNOPENED_SNAP_NOT_VERIFIED", ActionPolicy.rejection(s, token, 1,
+        assertEquals("DIRECT_SNAP_CONTROL_REQUIRED", ActionPolicy.rejection(s, token, 1,
             ActionRequest(ActionKind.OPEN_SNAP, snapshot, Box(60, 50, 72, 62)), snapshot))
     }
 }

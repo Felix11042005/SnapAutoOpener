@@ -23,6 +23,42 @@ internal fun withExcludedRow(label: String = "My AI"): UiSnapshot {
 
 class RecognitionTest {
     private fun recognize(s: UiSnapshot) = ScreenRecognizer.inspect(s)
+    @Test fun bottomChatNavigationDoesNotDuplicateTitle() {
+        val s = chatFixture()
+        val nodes = s.nodes + UiNode(6, 0, listOf("Chat"), Box(100, 1910, 300, 1970))
+        assertEquals(ScreenKind.CHAT_LIST, recognize(s.copy(nodes = nodes)).screen)
+        assertEquals(2, recognize(s.copy(nodes = nodes)).facts.headers)
+    }
+    @Test fun twoHeadersBeforeContentRemainAmbiguous() {
+        val s = chatFixture()
+        val nodes = s.nodes + UiNode(6, 0, listOf("Chats"), Box(350, 60, 550, 120))
+        assertEquals(ScreenKind.UNKNOWN, recognize(s.copy(nodes = nodes)).screen)
+    }
+    @Test fun missingUnreadFilterAllowsExactStatusInStructuralList() {
+        val s = chatFixture().let { it.copy(nodes = it.nodes.filter { n -> n.index != 2 }) }
+        val r = recognize(s)
+        assertEquals(ScreenKind.CHAT_LIST, r.screen)
+        assertEquals(FilterState.UNKNOWN, r.filter)
+        assertEquals(1, r.rows.size)
+    }
+    @Test fun noFilterAndNoStatusCannotVerifyList() {
+        val s = chatFixture().let { it.copy(nodes = it.nodes.filter { n -> n.index !in listOf(2, 5) }) }
+        assertEquals(ScreenKind.UNKNOWN, recognize(s).screen)
+    }
+    @Test fun contactNamedChatCannotReplaceMissingTitle() {
+        val s = chatFixture().let { it.copy(nodes = it.nodes.filter { n -> n.index !in listOf(1, 2) } +
+            UiNode(6, 4, listOf("Chat"), Box(100, 250, 300, 290))) }
+        assertEquals(ScreenKind.UNKNOWN, recognize(s).screen)
+    }
+    @Test fun clickActionAndPathAreRequiredOnStatusItself() {
+        val valid = directFixture()
+        assertEquals(1, ScreenRecognizer.directSnapControls(valid).size)
+        for (replacement in listOf(valid.nodes[5].copy(canClick = false),
+            valid.nodes[5].copy(clickable = false), valid.nodes[5].copy(path = emptyList()))) {
+            val changed = valid.copy(nodes = valid.nodes.map { if (it.index == 5) replacement else it })
+            assertTrue(ScreenRecognizer.directSnapControls(changed).isEmpty())
+        }
+    }
     @Test fun semanticListFindsRowWithoutFixedCoordinates() {
         val r = recognize(chatFixture())
         assertEquals(ScreenKind.CHAT_LIST, r.screen)
