@@ -8,8 +8,8 @@ android {
         applicationId = "de.example.snapauto"
         minSdk = 26
         targetSdk = 35
-        versionCode = 32
-        versionName = "5.3.2-row-recognition"
+        versionCode = 33
+        versionName = "5.4-visual-single-snap"
     }
 
     val keystorePath = System.getenv("ANDROID_KEYSTORE_PATH")

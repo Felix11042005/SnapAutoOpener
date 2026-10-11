@@ -1,9 +1,10 @@
 package de.example.snapauto
 
 enum class ActionKind { OPEN_SNAP, ADVANCE_SNAP, SCROLL_LIST, BACK }
-data class ActionRequest(val kind: ActionKind, val snapshot: UiSnapshot, val target: Box? = null, val nodeIndex: Int? = null)
+data class ActionRequest(val kind: ActionKind, val snapshot: UiSnapshot, val target: Box? = null,
+    val nodeIndex: Int? = null, val visual: VisualTapProof? = null)
 
-/** Explicit interactive authorization, fresh screen and a direct semantic click target. */
+/** Explicit interactive authorization, fresh screen and direct status or confirmed visual evidence. */
 object ActionPolicy {
     fun rejection(session: DiagnosticSession, token: Long, now: Long,
                   request: ActionRequest, current: UiSnapshot?): String? {
@@ -14,6 +15,10 @@ object ActionPolicy {
         val evidence = ScreenRecognizer.inspect(current)
         if (evidence.screen != ScreenKind.CHAT_LIST) return "UNVERIFIED_SCREEN"
         if (request.kind == ActionKind.OPEN_SNAP) {
+            request.visual?.let { proof ->
+                return if (request.nodeIndex == null && request.target == proof.target.icon &&
+                    proof.valid(token, now, current, evidence)) null else "VISUAL_PROOF_INVALID"
+            }
             return if (ScreenRecognizer.directSnapControls(current, evidence).any {
                 it.index == request.nodeIndex && it.bounds == request.target
             }) null else "DIRECT_SNAP_CONTROL_REQUIRED"
