@@ -248,7 +248,7 @@ class SnapAccessibilityService : AccessibilityService() {
             val h = bitmap.height
             prefs.edit().putBoolean("screenshot_ok", true).apply()
             if (batchPhase == 0) {
-                // V4.9: User activates "Ungelesen" manually BEFORE START.
+                // V5.0: User activates "Ungelesen" manually BEFORE START.
                 // Never tap a guessed filter location.
                 val root = rootInActiveWindow
                 val composer = hasEditableComposer(root)
@@ -272,7 +272,7 @@ class SnapAccessibilityService : AccessibilityService() {
                 return@takeVisualSnapshot
             }
             if (batchPhase == 1) {
-                // V4.9 diagnostic-only: absolutely no taps, swipes or viewer actions.
+                // V5.0 diagnostic-only: absolutely no taps, swipes or viewer actions.
                 val chip = detectUnreadChip(bitmap) != null
                 val header = hasChatHeaderAndFilter(rootInActiveWindow, w, h)
                 val composer = hasEditableComposer(rootInActiveWindow)
@@ -497,54 +497,51 @@ class SnapAccessibilityService : AccessibilityService() {
         trace.add(message)
         if (trace.size > 20) trace.removeAt(0)
         prefs.edit().putString("visual_status", message)
-            .putString("diagnostic_report", "V4.9 Ablauf:\n" + trace.joinToString("\n")).apply()
+            .putString("diagnostic_report", "V5.0 Ablauf:\n" + trace.joinToString("\n")).apply()
     }
 
     private fun finishBatch(reason: String) {
         SnapState.batchMode = false
         prefs.edit()
             .putString("visual_status", "Durchlauf beendet: $reason")
-            .putString("diagnostic_report", "V4.9: $reason\nChat-Öffnungsversuche: ${SnapState.openedInBatch}; Viewer-Weiter-Tipps: $viewerAdvanceTotal.\n" + trace.joinToString("\n"))
+            .putString("diagnostic_report", "V5.0: $reason\nChat-Öffnungsversuche: ${SnapState.openedInBatch}; Viewer-Weiter-Tipps: $viewerAdvanceTotal.\n" + trace.joinToString("\n"))
             .apply()
     }
 
     // Filled red/purple snap icon near left of row; outline icons and blue chats excluded.
+    // V5.0: Detect the small filled status squares beneath contact names.
+    // Snapchat screenshot: squares near 18% screen width, not avatars or chat buttons.
+    // Detection remains diagnostic-only; never dispatch a gesture from these coordinates.
     private fun findFilledSnapIcons(bitmap: Bitmap): List<Pair<Float, Float>> {
         val w = bitmap.width
         val h = bitmap.height
-        val results = mutableListOf<Pair<Float, Float>>()
-        // Examine a compact icon footprint, not an arbitrary colored patch in a chat row.
-        val radius = max(5, (w * 0.010f).toInt())
-        val stride = max(4, radius)
-        var y = (h * 0.205f).toInt()
-        while (y < (h * 0.81f).toInt()) {
-            var x = (w * 0.14f).toInt()
-            while (x < (w * 0.26f).toInt()) {
-                var redPurple = 0
+        val hits = mutableListOf<Pair<Float, Float>>()
+        val radius = max(3, (w * 0.009f).toInt())
+        val stepY = max(3, radius / 2)
+        val xStart = (w * 0.155f).toInt()
+        val xEnd = (w * 0.205f).toInt()
+        for (y in (h * 0.26f).toInt() until (h * 0.87f).toInt() step stepY) {
+            for (x in xStart until xEnd step max(2, radius / 2)) {
+                var filled = 0
                 var blue = 0
-                var centerFilled = 0
                 var total = 0
-                for (dy in -radius..radius step 3) for (dx in -radius..radius step 3) {
-                    val pixel = bitmap.getPixel((x + dx).coerceIn(0, w - 1), (y + dy).coerceIn(0, h - 1))
-                    if (isSnapColor(pixel)) {
-                        redPurple++
-                        if (kotlin.math.abs(dx) <= radius / 2 && kotlin.math.abs(dy) <= radius / 2) centerFilled++
-                    }
-                    if (Color.blue(pixel) > Color.red(pixel) * 1.3f &&
-                        Color.blue(pixel) > Color.green(pixel) * 1.2f &&
-                        Color.blue(pixel) > 120) blue++
+                for (dy in -radius..radius step 2) for (dx in -radius..radius step 2) {
+                    val px = (x + dx).coerceIn(0, w - 1)
+                    val py = (y + dy).coerceIn(0, h - 1)
+                    val color = bitmap.getPixel(px, py)
+                    if (isSnapColor(color)) filled++
+                    if (Color.blue(color) > Color.red(color) * 1.3f &&
+                        Color.blue(color) > Color.green(color) * 1.2f &&
+                        Color.blue(color) > 120) blue++
                     total++
                 }
-                // Filled center excludes hollow red/purple icons; blue veto excludes chats.
-                if (redPurple >= total * 0.72f && centerFilled >= 8 && blue == 0 &&
-                    results.none { kotlin.math.abs(it.second - y) < h * 0.052f }) {
-                    results.add(x.toFloat() to y.toFloat())
+                if (filled >= total * 0.68f && blue == 0 &&
+                    hits.none { kotlin.math.abs(it.second - y) < h * 0.055f }) {
+                    hits.add(x.toFloat() to y.toFloat())
                 }
-                x += stride
             }
-            y += stride
         }
-        return results
+        return hits
     }
 
     // Horizontal row separators in the Snapchat chat list (not present in snap viewer).
