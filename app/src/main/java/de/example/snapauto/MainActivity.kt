@@ -8,265 +8,63 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.widget.Button
-import android.widget.Switch
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 
 class MainActivity : AppCompatActivity() {
-
-    private val snapchatPackage = "com.snapchat.android"
-    private val uiHandler = Handler(Looper.getMainLooper())
-
-    private val refreshRunnable = object : Runnable {
-        override fun run() {
-            updateDiagnosticReport()
-            uiHandler.postDelayed(this, 500)
-        }
+    private val handler = Handler(Looper.getMainLooper())
+    private val refresh = object : Runnable {
+        override fun run() { render(); handler.postDelayed(this, 500) }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-
-        val toggle = findViewById<Switch>(R.id.enabledSwitch)
-        toggle.isChecked = false
-        toggle.isEnabled = false
-        toggle.visibility = android.view.View.GONE
-
-        findViewById<Button>(R.id.notificationAccess).setOnClickListener {
-            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+        val content = findViewById<android.view.View>(R.id.content)
+        ViewCompat.setOnApplyWindowInsetsListener(content) { view, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            insets
         }
-
+        findViewById<TextView>(R.id.title).text = "SnapAutoOpener ${BuildConfig.VERSION_NAME}"
         findViewById<Button>(R.id.accessibilityAccess).setOnClickListener {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         }
-
-        findViewById<Button>(R.id.checkProfile).setOnClickListener {
-            updateProfileStatus(showToast = true)
+        findViewById<Button>(R.id.startDiagnostic).setOnClickListener {
+            SnapAccessibilityService.connected?.startDiagnostic()
+            render()
         }
-
-        findViewById<Button>(R.id.runDiagnostic).setOnClickListener {
-            val now = System.currentTimeMillis()
-            val diagPrefs = getSharedPreferences("snapauto_diag", MODE_PRIVATE)
-            diagPrefs.edit()
-                .putBoolean("diagnostic_running", true)
-                .putLong("diagnostic_started_at", now)
-                .putString("diagnostic_report", "Profil-Test läuft 30 Sekunden. Öffnen Sie Snapchat im VERTRAULICHEN PROFIL manuell und wechseln Sie zur Chatliste. Es werden keine Gesten ausgeführt.")
-                .putInt("diagnostic_score", -1)
-                .putInt("event_count", 0)
-                .putInt("snap_event_count", 0)
-                .putBoolean("screenshot_ok", false)
-                .putInt("visual_candidates", 0)
-                .remove("last_event_package")
-                .remove("last_event_type")
-                .remove("last_event_at")
-                .remove("last_snap_event_at")
-                .remove("root_package")
-                .remove("root_available")
-                .apply()
-
-            SnapState.batchMode = false
-            SnapState.batchStopRequested = true
-            SnapState.pendingUntil = 0L
-            SnapState.diagnosticReport = "Profil-Test gestartet. Snapchat im vertraulichen Profil manuell öffnen."
-            SnapState.diagnosticBestScore = -1
-            SnapState.diagnosticUntil = now + 30_000
-            SnapState.diagnosticRequested = true
-            SnapState.singleTapRequested = false
-            SnapState.batchRunId++
-
-            Toast.makeText(this, "30 Sekunden: Jetzt Snapchat im VERTRAULICHEN PROFIL manuell öffnen.", Toast.LENGTH_LONG).show()
+        findViewById<Button>(R.id.stopDiagnostic).setOnClickListener {
+            SnapAccessibilityService.connected?.stopDiagnostic()
+            render()
         }
-
         findViewById<Button>(R.id.resetDiagnostic).setOnClickListener {
-            SnapState.batchMode = false
-            SnapState.batchStopRequested = true
-            SnapState.batchRunId++
-            SnapState.diagnosticRequested = false
-            SnapState.singleTapRequested = false
-            SnapState.openedInBatch = 0
-            SnapState.diagnosticReport = "Noch keine Diagnose durchgeführt."
-            val p = getSharedPreferences("snapauto_diag", MODE_PRIVATE)
-            val connected = p.getBoolean("service_connected", false)
-            val heartbeat = p.getLong("heartbeat_at", 0L)
-            p.edit().clear().putBoolean("service_connected", connected)
-                .putLong("heartbeat_at", heartbeat)
-                .putString("diagnostic_report", "Noch keine Diagnose durchgeführt.")
-                .putString("visual_status", "Zurückgesetzt.")
-                .apply()
-            updateDiagnosticReport()
-            Toast.makeText(this, "Diagnose zurückgesetzt.", Toast.LENGTH_SHORT).show()
+            SnapAccessibilityService.connected?.resetReport()
+            getSharedPreferences("snapauto_diag", MODE_PRIVATE).edit().clear().apply()
+            render()
         }
-
         findViewById<Button>(R.id.copyDiagnostic).setOnClickListener {
-            val status = findViewById<TextView>(R.id.serviceStatus).text.toString()
-            val report = findViewById<TextView>(R.id.diagnosticReport).text.toString()
-            val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
-            clipboard.setPrimaryClip(ClipData.newPlainText("SnapAuto Diagnose", "$status\n\n$report"))
-            Toast.makeText(this, "Diagnose kopiert.", Toast.LENGTH_SHORT).show()
-        }
-
-        findViewById<Button>(R.id.openExisting).setOnClickListener {
-            val now = System.currentTimeMillis()
-            val diag = getSharedPreferences("snapauto_diag", MODE_PRIVATE)
-            val alive = diag.getBoolean("service_connected", false) &&
-                now - diag.getLong("heartbeat_at", 0L) < 2500
-            if (!alive) {
-                Toast.makeText(this, "Accessibility-Service nicht verbunden.", Toast.LENGTH_LONG).show()
-                return@setOnClickListener
-            }
-            SnapState.batchMode = true
-            SnapState.batchStopRequested = false
-            SnapState.openedInBatch = 0
-            SnapState.pendingUntil = 0L
-            SnapState.diagnosticRequested = false
-            SnapState.singleTapRequested = false
-            SnapState.batchUntil = now + 120_000L
-            SnapState.batchRunId++
-            diag.edit()
-                .putString("visual_status", "Manueller Durchlauf bereit: Snapchat im vertraulichen Profil öffnen.")
-                .putString("diagnostic_report", "Manueller Durchlauf gestartet. Filter muss bestätigt werden; maximal 10 Chat-Versuche und 120 Sekunden.")
-                .putInt("visual_opened", 0)
-                .apply()
-            openSnapchatAfterStart()
-        }
-
-        findViewById<Button>(R.id.stopBatch).setOnClickListener {
-            SnapState.batchStopRequested = true
-            SnapState.batchMode = false
-            SnapState.batchRunId++
-            SnapState.singleTapRequested = false
-            SnapState.pendingUntil = 0L
-            Toast.makeText(this, "Durchlauf gestoppt. Chat-Versuche: ${SnapState.openedInBatch}", Toast.LENGTH_SHORT).show()
-        }
-
-        updateProfileStatus(false)
-        updateDiagnosticReport()
-    }
-
-    override fun onResume() {
-        super.onResume()
-        updateProfileStatus(false)
-        uiHandler.removeCallbacks(refreshRunnable)
-        uiHandler.post(refreshRunnable)
-    }
-
-    override fun onPause() {
-        uiHandler.removeCallbacks(refreshRunnable)
-        super.onPause()
-    }
-
-    private fun updateDiagnosticReport() {
-        val prefs = getSharedPreferences("snapauto_diag", MODE_PRIVATE)
-        val now = System.currentTimeMillis()
-        val connected = prefs.getBoolean("service_connected", false)
-        val heartbeat = prefs.getLong("heartbeat_at", 0L)
-        val alive = connected && now - heartbeat < 2500
-        val lastEvent = prefs.getLong("last_event_at", 0L)
-        val lastSnapEvent = prefs.getLong("last_snap_event_at", 0L)
-        val rootAvailable = prefs.getBoolean("root_available", false)
-        val rootPackage = prefs.getString("root_package", "-") ?: "-"
-        val screenshotOk = prefs.getBoolean("screenshot_ok", false)
-        val visualCandidates = prefs.getInt("visual_candidates", 0)
-        val visualOpened = prefs.getInt("visual_opened", 0)
-        val visualStatus = prefs.getString("visual_status", "-") ?: "-"
-        val events = prefs.getInt("event_count", 0)
-        val snapEvents = prefs.getInt("snap_event_count", 0)
-        val startedAt = prefs.getLong("diagnostic_started_at", 0L)
-        val diagnosticAge = if (startedAt > 0) now - startedAt else 0L
-        val report = prefs.getString("diagnostic_report", SnapState.diagnosticReport)
-            ?: SnapState.diagnosticReport
-
-        fun time(value: Long): String {
-            if (value <= 0) return "-"
-            return SimpleDateFormat("HH:mm:ss", Locale.GERMANY).format(Date(value))
-        }
-
-        val verdict = when {
-            !alive -> "ERGEBNIS: Accessibility-Service ist NICHT verbunden."
-            startedAt > 0 && diagnosticAge > 30_000 && snapEvents == 0 ->
-                "ERGEBNIS: Service läuft, aber es kam KEIN Snapchat-Accessibility-Event an."
-            screenshotOk ->
-                "ERGEBNIS: V5.0 Screenshot-Zugriff funktioniert."
-            snapEvents > 0 ->
-                "ERGEBNIS: Snapchat-Events kommen an. V5.0 wartet auf Screenshot-Diagnose."
-            else -> "ERGEBNIS: Service läuft. Diagnose starten und Snapchat-Chatliste öffnen."
-        }
-
-        findViewById<TextView>(R.id.serviceStatus).text = buildString {
-            appendLine(verdict)
-            appendLine()
-            appendLine("Service verbunden: ${if (alive) "JA" else "NEIN"}")
-            appendLine("Letztes Event: ${time(lastEvent)}")
-            appendLine("Letztes Snapchat-Event: ${time(lastSnapEvent)}")
-            appendLine("Events / Snapchat: $events / $snapEvents")
-            appendLine("Letztes Event-Paket: ${prefs.getString("last_event_package", "-") ?: "-"}")
-            appendLine("Screenshot: ${if (screenshotOk) "JA" else "NEIN"}")
-            appendLine("Visuelle Kandidaten: $visualCandidates")
-            appendLine("Visuell geöffnet: $visualOpened")
-            append("V5.0-Status: $visualStatus")
-        }
-
-        findViewById<TextView>(R.id.diagnosticReport).text = report
-    }
-
-    private fun openSnapchatAfterStart() {
-        val launchIntent = packageManager.getLaunchIntentForPackage(snapchatPackage)
-        if (launchIntent == null) {
-            SnapState.batchMode = false
-            SnapState.batchStopRequested = true
-            getSharedPreferences("snapauto_diag", MODE_PRIVATE).edit()
-                .putString("diagnostic_report",
-                    "Snapchat kann aus diesem Android-Profil nicht gestartet werden. " +
-                    "Auch ein entsperrtes vertrauliches Profil ist für normale Apps " +
-                    "im Hauptprofil nicht direkt zugänglich. Installieren Sie " +
-                    "SnapAutoOpener zusätzlich im vertraulichen Profil.")
-                .apply()
-            Toast.makeText(this,
-                "Snapchat nicht direkt erreichbar. SnapAutoOpener muss im selben Profil installiert sein.",
-                Toast.LENGTH_LONG).show()
-            return
-        }
-        try {
-            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            startActivity(launchIntent)
-            getSharedPreferences("snapauto_diag", MODE_PRIVATE).edit()
-                .putString("visual_status", "Snapchat-Start angefordert; Bildschirm wird geprüft.")
-                .apply()
-        } catch (e: Exception) {
-            SnapState.batchMode = false
-            SnapState.batchStopRequested = true
-            getSharedPreferences("snapauto_diag", MODE_PRIVATE).edit()
-                .putString("diagnostic_report",
-                    "Android hat den Snapchat-Start blockiert: " +
-                    (e.message ?: e.javaClass.simpleName) +
-                    ". Bitte beide Apps im selben entsperrten Profil verwenden.")
-                .apply()
-            Toast.makeText(this, "Android blockiert den profilübergreifenden Start.",
-                Toast.LENGTH_LONG).show()
+            getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText(
+                "SnapAuto Diagnose", findViewById<TextView>(R.id.diagnosticReport).text))
         }
     }
 
-    private fun updateProfileStatus(showToast: Boolean) {
-        val status = findViewById<TextView>(R.id.profileStatus)
-        val snapchatAvailable = packageManager.getLaunchIntentForPackage(snapchatPackage) != null
+    override fun onResume() { super.onResume(); handler.post(refresh) }
+    override fun onPause() { handler.removeCallbacks(refresh); super.onPause() }
 
-        status.text = if (snapchatAvailable) {
-            "✓ Snapchat ist in diesem Android-Profil verfügbar."
-        } else {
-            "✗ Snapchat ist in diesem Android-Profil nicht verfügbar."
-        }
-
-        if (showToast) {
-            Toast.makeText(
-                this,
-                if (snapchatAvailable) "Snapchat im selben Android-Profil gefunden." else "Keine Snapchat-Instanz im selben Android-Profil gefunden.",
-                Toast.LENGTH_SHORT
-            ).show()
-        }
+    private fun render() {
+        val service = SnapAccessibilityService.connected
+        findViewById<Button>(R.id.startDiagnostic).isEnabled = service != null && !service.running
+        findViewById<Button>(R.id.stopDiagnostic).isEnabled = service?.running == true
+        findViewById<TextView>(R.id.serviceStatus).text = if (service == null)
+            "Bedienungshilfe nicht verbunden. START ist gesperrt." else service.status
+        val local = packageManager.getLaunchIntentForPackage(ScreenRecognizer.TARGET_PACKAGE) != null
+        findViewById<TextView>(R.id.profileStatus).text =
+            "Snapchat im aufrufenden Profil sichtbar: ${if (local) "ja" else "nein"}. " +
+            "Das identifiziert nicht das vertrauliche Profil. Gewünschte Instanz selbst im Launcher öffnen."
+        findViewById<TextView>(R.id.diagnosticReport).text = service?.report ?:
+            getSharedPreferences("snapauto_diag", MODE_PRIVATE).getString("last_report", "Noch keine Diagnose. Gespeicherte Berichte beweisen keine aktuelle Dienstverbindung.")
     }
 }

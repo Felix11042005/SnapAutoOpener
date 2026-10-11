@@ -1,124 +1,34 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent">
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="24dp">
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Snap Auto Opener V5.0 – Schnellmodus"
-            android:textStyle="bold"
-            android:textSize="28sp"
-            android:layout_marginBottom="12dp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Manueller Start: Ungelesen-Filter, ausgefüllte Snap-Symbole und bis zu 8 Weiter-Tipps je Chat."
-            android:textSize="16sp"
-            android:layout_marginBottom="18dp" />
-
-        <TextView
-            android:id="@+id/profileStatus"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Profilstatus wird geprüft …"
-            android:textStyle="bold"
-            android:layout_marginBottom="12dp" />
-
-        <Button
-            android:id="@+id/checkProfile"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Snapchat in diesem Profil prüfen" />
-
-        <Button
-            android:id="@+id/notificationAccess"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Benachrichtigungszugriff (nicht benötigt)"
-            android:layout_marginTop="18dp" />
-
-        <Button
-            android:id="@+id/accessibilityAccess"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="2. Bedienungshilfe aktivieren"
+    android:id="@+id/content" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:fillViewport="true">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:padding="20dp">
+        <TextView android:id="@+id/title" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:textSize="24sp" android:textStyle="bold" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="12dp" android:text="Diagnosemodus: keine automatischen Tipps, Wischgesten oder Chat-Öffnungen. Bedienfunktionen bleiben im Projekt erhalten; ihre Freigabe folgt erst nach verlässlicher Erkennung."
+            android:textSize="16sp" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="12dp" android:text="Snap untersagt nicht autorisierte automatisierte Drittanbieter-Interaktionen. Auch diese Diagnose ist nicht ausdrücklich freigegeben. Live-Nutzung bitte mit Snap klären. Offline-Tests greifen nicht auf Snapchat zu." />
+        <TextView android:id="@+id/profileStatus" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="16dp" />
+        <Button android:id="@+id/accessibilityAccess" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="Bedienungshilfe öffnen" android:layout_marginTop="12dp" />
+        <TextView android:id="@+id/serviceStatus" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="12dp" android:textIsSelectable="true" />
+        <Button android:id="@+id/startDiagnostic" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="START – 30 Sekunden Diagnose" android:layout_marginTop="16dp" />
+        <Button android:id="@+id/stopDiagnostic" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="STOP – sofort beenden" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="Nach START die gewünschte Snapchat-Instanz manuell öffnen und die Chatliste mit Ungelesen anzeigen. STOP erscheint zusätzlich über der App. Nicht verfügbare oder mehrdeutige Merkmale bleiben unbekannt. Bilder werden nicht gespeichert."
             android:layout_marginTop="12dp" />
-
-        <TextView
-            android:id="@+id/serviceStatus"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Service-Status wird geprüft …"
-            android:textIsSelectable="true"
-            android:typeface="monospace"
-            android:textSize="13sp"
-            android:padding="12dp"
+        <Button android:id="@+id/copyDiagnostic" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="Diagnose kopieren" android:layout_marginTop="12dp" />
+        <Button android:id="@+id/resetDiagnostic" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="STOP und Diagnose löschen" />
+        <TextView android:id="@+id/diagnosticReport" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:textIsSelectable="true" android:typeface="monospace" android:textSize="12sp"
             android:layout_marginTop="12dp" />
-
-        <Button
-            android:id="@+id/runDiagnostic"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Diagnose starten"
-            android:layout_marginTop="18dp" />
-
-        <Button
-            android:id="@+id/copyDiagnostic"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Diagnose kopieren"
-            android:layout_marginTop="8dp" />
-
-        <Button
-            android:id="@+id/resetDiagnostic"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Diagnose zurücksetzen"
-            android:layout_marginTop="8dp" />
-
-        <TextView
-            android:id="@+id/diagnosticReport"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Noch keine Diagnose durchgeführt."
-            android:textIsSelectable="true"
-            android:typeface="monospace"
-            android:textSize="12sp"
-            android:padding="12dp"
-            android:layout_marginTop="10dp" />
-
-        <Switch
-            android:id="@+id/enabledSwitch"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Neue Snaps automatisch öffnen"
-            android:layout_marginTop="24dp" />
-
-        <Button
-            android:id="@+id/openExisting"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="SCHNELLMODUS STARTEN"
-            android:layout_marginTop="24dp" />
-
-        <Button
-            android:id="@+id/stopBatch"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="STOPP – Durchlauf beenden"
-            android:layout_marginTop="10dp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="V5.0 ist experimentell. Prüfen Sie die ersten Durchläufe. Screenshots werden nicht gespeichert."
-            android:layout_marginTop="24dp" />
     </LinearLayout>
 </ScrollView>

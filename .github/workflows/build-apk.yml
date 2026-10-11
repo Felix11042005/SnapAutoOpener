@@ -3,11 +3,16 @@ name: Build APK
 on:
   push:
     branches: [ "main" ]
+  pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
@@ -35,14 +40,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ -n "${KEYSTORE_B64:-}" ] && [ -n "${ANDROID_KEYSTORE_PASSWORD:-}" ] && [ -n "${ANDROID_KEY_ALIAS:-}" ] && [ -n "${ANDROID_KEY_PASSWORD:-}" ]; then
+          gradle :app:testDebugUnitTest :app:lintDebug --stacktrace
+          if [ "$GITHUB_EVENT_NAME" != "pull_request" ] && [ -n "${KEYSTORE_B64:-}" ] && [ -n "${ANDROID_KEYSTORE_PASSWORD:-}" ] && [ -n "${ANDROID_KEY_ALIAS:-}" ] && [ -n "${ANDROID_KEY_PASSWORD:-}" ]; then
             echo "$KEYSTORE_B64" | base64 --decode > "$GITHUB_WORKSPACE/app/snapauto-release.jks"
             export ANDROID_KEYSTORE_PATH="$GITHUB_WORKSPACE/app/snapauto-release.jks"
             gradle :app:assembleRelease --stacktrace
             cp app/build/outputs/apk/release/app-release.apk /tmp/SnapAutoOpener.apk
             echo "SIGNED_BUILD=true" >> "$GITHUB_ENV"
           else
-            echo "::warning::Signing secrets are missing. Building debug APK only."
+            echo "::notice::PR validation or signing secrets unavailable: building debug APK."
             gradle :app:assembleDebug --stacktrace
             cp app/build/outputs/apk/debug/app-debug.apk /tmp/SnapAutoOpener.apk
             echo "SIGNED_BUILD=false" >> "$GITHUB_ENV"
@@ -63,5 +69,16 @@ jobs:
           name: SnapAutoOpener-apk
           path: /tmp/SnapAutoOpener.apk
           if-no-files-found: error
+
+      - name: Upload validation reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-reports
+          path: |
+            app/build/reports/tests/
+            app/build/test-results/
+            app/build/reports/lint-results-debug.*
+          if-no-files-found: warn
 
 # Stable signing trigger

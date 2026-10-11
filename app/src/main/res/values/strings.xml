@@ -1,1 +1,4 @@
-<resources><string name="app_name">Snap Auto Opener</string></resources>
+<resources>
+    <string name="app_name">Snap Auto Opener</string>
+    <string name="service_description">Manuell gestartete Diagnose sichtbarer Snapchat-Oberflächen. Keine Bedienaktionen im Diagnosemodus. Bildschirmdaten bleiben lokal; Bilder werden nicht gespeichert. STOP und automatisches Zeitlimit beenden die Diagnose.</string>
+</resources>
