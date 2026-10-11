@@ -4,6 +4,10 @@ package de.example.snapauto
 enum class SessionMode { DIAGNOSTIC, INTERACTIVE }
 
 class DiagnosticSession {
+    var actionAttempts = 0
+        private set
+    var acceptedClicks = 0
+        private set
     var mode = SessionMode.DIAGNOSTIC
         private set
     var generation = 0L
@@ -17,6 +21,8 @@ class DiagnosticSession {
         require(duration in 1..120_000)
         generation++
         this.mode = mode
+        actionAttempts = 0
+        acceptedClicks = 0
         deadline = now + duration
         running = true
         return generation
@@ -24,6 +30,14 @@ class DiagnosticSession {
 
     fun accepts(token: Long, now: Long) = running && token == generation && now < deadline
     fun expired(now: Long) = running && now >= deadline
+
+    fun claimOpenAttempt(token: Long, now: Long): Boolean {
+        if (!accepts(token, now) || mode != SessionMode.INTERACTIVE || actionAttempts != 0) return false
+        actionAttempts++
+        return true
+    }
+
+    fun markClickAccepted() { acceptedClicks++ }
 
     fun stop() {
         running = false

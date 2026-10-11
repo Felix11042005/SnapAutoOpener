@@ -5,6 +5,8 @@ import android.accessibilityservice.GestureDescription
 import android.graphics.Path
 import android.os.Handler
 import android.os.SystemClock
+import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityWindowInfo
 
 /** Sole owner of interaction APIs. Kept at the user's request, never called by diagnostics. */
 class AndroidActionExecutor(
@@ -15,7 +17,47 @@ class AndroidActionExecutor(
     private val report: (String) -> Unit
 ) {
     private var inFlight = false
+    private val opener = SingleSnapOpener(session, SystemClock::elapsedRealtime, currentSnapshot,
+        SnapClickPort(::clickExactControl))
+
+    fun openSnapOnce(token: Long, request: ActionRequest): OpenResult = opener.open(token, request)
+
+    @Suppress("DEPRECATION")
+    private fun clickExactControl(expected: UiSnapshot, control: UiNode, authorize: () -> Boolean): Boolean? {
+        val windows = service.windows
+        var held: AccessibilityNodeInfo? = null
+        try {
+            if (windows.any { it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD }) return null
+            val window = windows.filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION && it.isActive && it.isFocused }
+                .singleOrNull() ?: return null
+            if (window.id != expected.windowId) return null
+            var node = window.root ?: return null
+            held = node
+            if (node.packageName?.toString() != ScreenRecognizer.TARGET_PACKAGE || control.path.isEmpty()) return null
+            for (index in control.path) {
+                if (index !in 0 until node.childCount) return null
+                val child = node.getChild(index)
+                node.recycle()
+                held = child
+                node = child ?: return null
+            }
+            if (node.windowId != expected.windowId ||
+                SnapshotReader.describe(node, control.index, control.parent, control.path) != control) return null
+            if (!authorize()) return null
+            return node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        } finally {
+            held?.recycle()
+            windows.forEach { it.recycle() }
+        }
+    }
+
     fun execute(token: Long, request: ActionRequest, completed: () -> Unit = {}) {
+        if (request.kind == ActionKind.OPEN_SNAP) {
+            val result = openSnapOnce(token, request)
+            report(result.reason)
+            if (result.accepted) completed()
+            return
+        }
         val rejection = ActionPolicy.rejection(session, token, SystemClock.elapsedRealtime(), request, currentSnapshot())
         if (rejection != null || inFlight) {
             report("ACTION_BLOCKED: ${rejection ?: "ACTION_IN_FLIGHT"}")

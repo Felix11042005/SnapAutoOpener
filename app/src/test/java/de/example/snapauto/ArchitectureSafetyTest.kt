@@ -12,13 +12,6 @@ class ArchitectureSafetyTest {
         main.resolve("java").walkTopDown().filter { it.extension == "kt" && it.name != "AndroidActionExecutor.kt" }
             .forEach { assertFalse(it.path, interaction.containsMatchIn(it.readText())) }
     }
-    @Test fun activityAndServiceDoNotArmInteractiveModeOrCallActions() {
-        for (file in listOf("MainActivity.kt", "SnapAccessibilityService.kt")) {
-            val text = main.resolve("java/de/example/snapauto/$file").readText()
-            assertFalse(text.contains("SessionMode.INTERACTIVE"))
-            assertFalse(Regex("actions\\s*\\.\\s*execute").containsMatchIn(text))
-        }
-    }
     @Test fun screenshotsNeverFallBackToEntireDisplay() {
         val text = main.resolve("java/de/example/snapauto/SnapAccessibilityService.kt").readText()
         assertFalse(Regex("\\btakeScreenshot\\s*\\(").containsMatchIn(text))

@@ -17,7 +17,8 @@ data class UiNode(
     val visible: Boolean = true, val enabled: Boolean = true,
     val selected: Boolean = false, val editable: Boolean = false,
     val clickable: Boolean = false, val list: Boolean = false,
-    val selectionKnown: Boolean = false
+    val selectionKnown: Boolean = false,
+    val canClick: Boolean = false, val path: List<Int> = emptyList()
 )
 
 data class UiSnapshot(
@@ -48,6 +49,16 @@ object ScreenRecognizer {
     private val ad = Regex("(?:^|[^\\p{L}])(?:werbung|anzeige|gesponsert|sponsored|advertisement|ad)(?:$|[^\\p{L}])")
     private fun normalized(value: String) = value.trim().lowercase(Locale.ROOT).replace(Regex("\\s+"), " ")
 
+    fun directSnapControls(snapshot: UiSnapshot, evidence: Recognition = inspect(snapshot)): List<UiNode> {
+        if (evidence.screen != ScreenKind.CHAT_LIST || !evidence.rowsEvaluated) return emptyList()
+        return snapshot.nodes.filter { node ->
+            node.visible && node.enabled && node.clickable && node.canClick &&
+                node.path.isNotEmpty() && node.labels.any { snapStatus.matches(normalized(it)) } &&
+                evidence.rows.any { it.contains(node.bounds) } &&
+                evidence.excludedRows.none { it.intersects(node.bounds) }
+        }.sortedWith(compareBy({ it.bounds.top }, { it.bounds.left }))
+    }
+
     fun inspect(snapshot: UiSnapshot): Recognition {
         if (snapshot.packageName != TARGET_PACKAGE) return Recognition(ScreenKind.UNKNOWN, reason = "WRONG_PACKAGE")
         val visible = snapshot.nodes.filter { it.visible && it.enabled && snapshot.bounds.contains(it.bounds) }
@@ -70,18 +81,34 @@ object ScreenRecognizer {
         if (snapshot.nodes.any { it.visible && it.editable }) {
             return blocked("EDITABLE_FIELD")
         }
-        if (headers.size != 1 || filters.size != 1) return unknown("HEADER_OR_FILTER_AMBIGUOUS")
-        val header = headers.single()
-        val filter = filters.single()
-        if (header.bounds.bottom > filter.bounds.top) return unknown("HEADER_FILTER_ORDER")
-        val lists = listNodes.filter { it.bounds.bottom > filter.bounds.bottom }
+        val byIndex = snapshot.nodes.associateBy { it.index }
+        fun insideList(start: UiNode): Boolean {
+            var node: UiNode? = start
+            val visited = mutableSetOf<Int>()
+            repeat(16) {
+                val current = node ?: return false
+                if (!visited.add(current.index)) return true
+                if (current.list) return true
+                node = current.parent?.let(byIndex::get)
+            }
+            return node != null
+        }
+        if (filters.size > 1) return unknown("HEADER_OR_FILTER_AMBIGUOUS")
+        val filter = filters.singleOrNull()
+        // Snapchat also labels its bottom navigation "Chat". Resolve the title
+        // relative to content, never by an assumed screen height or fixed strip.
+        val anchorTop = filter?.bounds?.top ?: statuses.minOfOrNull { it.bounds.top }
+            ?: return unknown("HEADER_OR_FILTER_AMBIGUOUS")
+        val header = headers.filter { it.bounds.bottom <= anchorTop && !insideList(it) }.singleOrNull()
+            ?: return unknown("HEADER_OR_FILTER_AMBIGUOUS")
+        val contentBoundary = filter?.bounds?.bottom ?: header.bounds.bottom
+        val lists = listNodes.filter { it.bounds.bottom > contentBoundary }
         if (lists.isEmpty()) return unknown("NO_LIST_STRUCTURE")
         val filterState = when {
-            filter.selected -> FilterState.SELECTED
-            filter.selectionKnown -> FilterState.NOT_SELECTED
+            filter?.selected == true -> FilterState.SELECTED
+            filter?.selectionKnown == true -> FilterState.NOT_SELECTED
             else -> FilterState.UNKNOWN
         }
-        val byIndex = snapshot.nodes.associateBy { it.index }
         // A whole row must be a bounded child of an actual list ancestor. A clickable
         // nested label is not a row: siblings (e.g. My AI + status) must stay together.
         fun owningRow(start: UiNode, requireClickable: Boolean): Box? {
@@ -95,7 +122,7 @@ object ScreenRecognizer {
                 val parent = node.parent?.let(byIndex::get) ?: return null
                 if (lists.any { it.index == parent.index }) {
                     return node.bounds.takeIf {
-                        !node.list && it.top >= filter.bounds.bottom &&
+                        !node.list && it.top >= contentBoundary &&
                             it.height <= snapshot.bounds.height / 3 && parent.bounds.contains(it) &&
                             (!requireClickable || clickable)
                     }
@@ -108,6 +135,7 @@ object ScreenRecognizer {
             ?: return blocked("UNSCOPED_AD_OR_MY_AI") }.distinct()
         val rows = statuses.mapNotNull { owningRow(it, requireClickable = true) }
             .distinct().filter { row -> excludedRows.none { it.intersects(row) } }.take(30)
+        if (filter == null && rows.isEmpty()) return unknown("NO_UNOPENED_LIST_EVIDENCE")
         return Recognition(ScreenKind.CHAT_LIST, filterState, "SEMANTIC_LIST", rows,
             excludedRows, rowsEvaluated = true, facts = facts)
     }

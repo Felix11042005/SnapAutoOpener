@@ -8,6 +8,7 @@ object RecognitionReport {
         return "Bildschirm=${result.screen}; Filter=${result.filter}; Status-Zeilen=$rows; stabil=$stable; " +
             "Header=${facts.headers}; Filterlabels=${facts.filters}; Listen=${facts.lists}; " +
             "Snap-Statuslabels=${facts.statusLabels}; My-AI-Hinweise=${facts.myAiLabels}; Werbehinweise=${facts.adLabels}; " +
+            "direkte Snap-Klickziele=${ScreenRecognizer.directSnapControls(snapshot, result).size}; " +
             "ausgeschlossene Zeilen=${result.excludedRows.size}; Knoten=${snapshot.nodes.size}; " +
             "Knotenlimit=${snapshot.nodeLimitReached}; fehlende Kinder=${snapshot.missingChildren}; " +
             "Baum unvollständig=${snapshot.truncated}; Fenstergrenzen gültig=${snapshot.bounds.valid}"
