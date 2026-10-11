@@ -7,7 +7,10 @@ object VisualSnapTarget {
     fun detect(pixels: IntArray, width: Int, height: Int, rows: List<Box>, density: Float): VisualIcon? {
         for (row in rows.distinct().sortedBy { it.top }) {
             val candidates = VisualEvidence.detect(pixels, width, height, listOf(row), density).filter { c ->
-                SnapIconShape.classify(pixels, width, height, c.bounds) == SnapSymbol.UNOPENED_SNAP
+                // In the reference layout the status is below the contact name.
+                // A name decoration in the upper half cannot substitute for it.
+                c.bounds.top + c.bounds.bottom >= row.top + row.bottom &&
+                    SnapIconShape.classify(pixels, width, height, c.bounds) == SnapSymbol.UNOPENED_SNAP
             }
             // Multiple matching shapes in a row are ambiguous; do not choose a convenient one.
             if (candidates.size == 1) {

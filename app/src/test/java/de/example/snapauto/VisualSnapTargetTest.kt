@@ -5,7 +5,7 @@ import org.junit.Test
 
 class VisualSnapTargetTest {
     private val row = Box(0, 20, 100, 80)
-    private fun image(color: Int = 0xffff0033.toInt(), x: Int = 20, y: Int = 40, size: Int = 12,
+    private fun image(color: Int = 0xffff0033.toInt(), x: Int = 20, y: Int = 50, size: Int = 12,
                       keep: (Int, Int) -> Boolean = { _, _ -> true }): IntArray {
         val pixels = IntArray(100 * 100) { 0xff222222.toInt() }
         for (dy in 0 until size) for (dx in 0 until size)
@@ -16,7 +16,7 @@ class VisualSnapTargetTest {
         VisualSnapTarget.detect(p, 100, 100, rows, density)
 
     @Test fun uniqueFilledRedOrPurpleSquareGivesExactIconBounds() {
-        assertEquals(Box(20, 40, 32, 52), detect(image())!!.icon)
+        assertEquals(Box(20, 50, 32, 62), detect(image())!!.icon)
         assertEquals(Box(70, 50, 82, 62), detect(image(color = 0xffaa00dd.toInt(), x = 70, y = 50))!!.icon)
         assertEquals(row, detect(image())!!.row)
     }
@@ -39,13 +39,13 @@ class VisualSnapTargetTest {
     }
     @Test fun twoMatchingShapesInSameRowAreAmbiguous() {
         val p = image()
-        for (y in 40 until 52) for (x in 60 until 72) p[y * 100 + x] = 0xffaa00dd.toInt()
+        for (y in 50 until 62) for (x in 60 until 72) p[y * 100 + x] = 0xffaa00dd.toInt()
         assertNull(detect(p))
     }
     @Test fun targetsAreSelectedOnlyFromSuppliedInitialRows() {
         val p = image(y = 65)
         assertNull(detect(p, listOf(Box(0, 20, 100, 60))))
-        assertEquals(Box(0, 60, 100, 90), detect(p, listOf(Box(0, 60, 100, 90)))!!.row)
+        assertEquals(Box(0, 60, 100, 80), detect(p, listOf(Box(0, 60, 100, 80)))!!.row)
     }
     @Test fun anyChangedRowPixelChangesConfirmationHash() {
         val p = image(); val before = detect(p)!!
@@ -67,5 +67,11 @@ class VisualSnapTargetTest {
     @Test fun sameShapedDecorationIsKnownResidualAmbiguity() {
         // Shape cannot establish identity. Semantic row proof and device validation remain essential.
         assertNotNull(detect(image(x = 65)))
+    }
+    @Test fun upperNameDecorationCannotReplaceLowerStatusSymbol() {
+        assertNull(detect(image(y = 25)))
+        val p = image()
+        for (y in 25 until 37) for (x in 60 until 72) p[y * 100 + x] = 0xffaa00dd.toInt()
+        assertEquals(Box(20, 50, 32, 62), detect(p)!!.icon)
     }
 }
