@@ -145,7 +145,8 @@ object ScreenRecognizer {
                 val parentIsList = lists.any { it.index == parent.index }
                 val bounded = !node.list && node.bounds.top >= contentBoundary &&
                     node.bounds.height <= snapshot.bounds.height / 3
-                if (bounded && (node.index != start.index || parentIsList)) candidate = node.bounds
+                val isContainer = children[node.index].orEmpty().isNotEmpty()
+                if (bounded && (node.index != start.index || parentIsList || isContainer)) candidate = node.bounds
                 if (!bounded && !transparentContainer(node)) return null
                 if (parentIsList) {
                     return candidate.takeIf { !requireClickable || clickable }

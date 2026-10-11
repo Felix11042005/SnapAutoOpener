@@ -11,6 +11,16 @@ internal fun nestedRowsFixture(label: String = "My AI"): UiSnapshot {
 }
 
 class NestedRowsTest {
+    @Test fun exclusionOnRowContainerItselfStillOwnsSnapChildren() {
+        val s = nestedRowsFixture()
+        val nodes = s.nodes.filter { it.index != 7 }.map {
+            if (it.index == 6) it.copy(labels = listOf("My AI")) else it
+        }
+        val r = ScreenRecognizer.inspect(s.copy(nodes = nodes))
+        assertEquals(ScreenKind.CHAT_LIST, r.screen)
+        assertEquals(1, r.rows.size)
+        assertEquals(listOf(Box(0, 420, 1000, 580)), r.excludedRows)
+    }
     @Test fun contentWrapperPreservesRowsAndSiblingExclusions() {
         for (label in listOf("My AI", "Gesponsert")) {
             val s = nestedRowsFixture(label)
