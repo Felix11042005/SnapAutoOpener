@@ -10,6 +10,7 @@ object RecognitionReport {
         return "Bildschirm=${result.screen}; Filter=${result.filter}; Status-Zeilen=$rows; stabil=$stable; " +
             "Header=${facts.headers}; Filterlabels=${facts.filters}; Listen=${facts.lists}; " +
             "Snap-Statuslabels=${facts.statusLabels}; My-AI-Hinweise=${facts.myAiLabels}; Werbehinweise=${facts.adLabels}; " +
+            "abgeschnittene Anzahlhinweise=${facts.truncatedStatusLabels}; " +
             "Statusfelder klickbar=${facts.statusClickable}; Statusfelder mit ACTION_CLICK=${facts.statusClickActions}; " +
             "direkte Snap-Klickziele=$clickTargets; " +
             "ausgeschlossene Zeilen=${result.excludedRows.size}; Knoten=${snapshot.nodes.size}; " +
@@ -21,8 +22,8 @@ object RecognitionReport {
     fun structure(snapshot: UiSnapshot): String {
         val byIndex = snapshot.nodes.associateBy { it.index }
         val markers = snapshot.nodes.filter { it.visible && ScreenRecognizer.markerKind(it) != null }
-        val selected = (markers.filter { ScreenRecognizer.markerKind(it) != "SNAP" }.take(4) +
-            markers.filter { ScreenRecognizer.markerKind(it) == "SNAP" }.take(3)).distinctBy { it.index }
+        val selected = (markers.filter { ScreenRecognizer.markerKind(it) in listOf("MY_AI", "AD") }.take(4) +
+            markers.filter { ScreenRecognizer.markerKind(it) in listOf("SNAP", "SNAP_PARTIAL") }.take(3)).distinctBy { it.index }
         fun box(b: Box) = "${b.left},${b.top},${b.right},${b.bottom}"
         return selected.joinToString("\n") { marker ->
             var current: UiNode? = marker

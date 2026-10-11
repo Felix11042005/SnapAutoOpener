@@ -99,7 +99,7 @@ class SnapAccessibilityService : AccessibilityService() {
             stopDiagnostic("START: sichtbarer Bestand nicht eindeutig erkennbar (${evidence?.reason ?: "NO_TARGET"}); kein Warten auf spätere Ziele.")
             return
         }
-        record("INITIAL_SELECTION", "Bestand beim START: ${existingSelection.controls.size} direkte Klickziele; ${existingSelection.rows.size} Snap-Statuszeilen. Keine späteren Ziele aufnehmen.")
+        record("INITIAL_SELECTION", "Bestand beim START: ${existingSelection.controls.size} direkte Klickziele; ${existingSelection.rows.size} Kandidatenzeilen. Keine späteren Ziele aufnehmen.")
         if (existingSelection.controls.isEmpty() && existingSelection.rows.isEmpty()) {
             record("ROW_STRUCTURE", RecognitionReport.structure(snap))
             stopDiagnostic("Bestand ohne eindeutig zugeordnete Snap-Statuszeile; kein Klick ausgeführt.")

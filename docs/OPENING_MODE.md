@@ -1,4 +1,4 @@
-# Öffnungsmodus 5.4 – Stand und Pixel-Prüfung
+# Öffnungsmodus 5.5 – Stand und Pixel-Prüfung
 
 ## Tatsächlich implementiert
 
@@ -6,11 +6,11 @@ Der manuelle START über Snapchat friert den sichtbaren Accessibility-Bestand ei
 
 Ist der genaue „Neuer Snap“-Status selbst anklickbar und bietet ACTION_CLICK an, wird dieser Knoten über seinen Pfad frisch aufgelöst und einmal nativ angeklickt. Ein anklickbarer Vorfahr der Unterhaltung ist kein Ersatz.
 
-Fehlt diese native Klickfähigkeit, kann 5.4 auf Android 14+ tatsächlich einmal tippen: Zwei Screenshots ausschließlich des identifizierten Snapchat-Fensters müssen ein einzelnes gefülltes rotes/violettes Quadrat innerhalb einer eindeutig zugeordneten ungeöffneten Snap-Zeile zeigen. Die Bilder müssen 300–2500 ms auseinanderliegen, mit gleichen Symbolgrenzen und identischen Pixeln in der ausgewählten Zeile. Der vollständige Baum muss unverändert bleiben. Erst dann wird die frisch erkannte Symbolmitte verwendet; es gibt keine festen Bildschirmkoordinaten oder einen Tipp auf die Mitte der Unterhaltung. STOP, Sitzungskennung, Timeout, aktuelle Fensterdaten und das Budget von einem Versuch werden unmittelbar vor dem dispatchGesture erneut geprüft.
+Fehlt diese native Klickfähigkeit, kann 5.5 auf Android 14+ tatsächlich einmal tippen: Zwei Screenshots ausschließlich des identifizierten Snapchat-Fensters müssen ein einzelnes gefülltes rotes/violettes Quadrat innerhalb einer eindeutig zugeordneten Kandidatenzeile zeigen. Diese benötigt einen exakten Snap-Status oder einen gezählten abgeschnittenen Status wie „4 neue…“; Letzterer reicht ausschließlich für die anschließende visuelle Prüfung. Die Bilder müssen 300–2500 ms auseinanderliegen, mit gleichen Symbolgrenzen und identischen Pixeln in der ausgewählten Zeile. Der vollständige Baum muss unverändert bleiben. Erst dann wird die frisch erkannte Symbolmitte verwendet; es gibt keine festen Bildschirmkoordinaten oder einen Tipp auf die Mitte der Unterhaltung. STOP, Sitzungskennung, Timeout, aktuelle Fensterdaten und das Budget von einem Versuch werden unmittelbar vor dem dispatchGesture erneut geprüft.
 
 My AI und Werbung werden einschließlich ihrer gesamten Zeile ausgeschlossen, auch wenn sie in der ersten Filterzeile stehen. Tastatur, Eingabefeld, unvollständiger Baum, verändertes/fehlendes Bild oder mehrere passende Symbole in derselben Zeile verhindern den Tipp. Nach abgelehntem Tipp oder Ausnahme gibt es keinen Ersatzversuch. STOP verwirft ausstehende Ergebnisse; ein bereits an Android übergebener 80-ms-Tipp kann noch fertiglaufen. Der Diagnosemodus bleibt ohne Bedienaktionen.
 
-Farbe und Form sind keine eindeutige Identität. Eine gleich geformte Dekoration in einer semantisch passenden Zeile kann weiterhin falsch erkannt werden. Die Formgrenzen sind noch nicht anhand echter Pixel-Bilder kalibriert. Die Kombination der Prüfungen ist synthetisch getestet; das tatsächliche Snapchat-Verhalten muss am Gerät bestätigt werden.
+Farbe und Form sind keine eindeutige Identität. Eine gleich geformte Dekoration in einer passenden Zeile kann weiterhin falsch erkannt werden. Das Eckenprofil und die Symbolentscheidungen sind jetzt an den isolierten bereitgestellten Bild-/Videoausschnitten geprüft. Vollständige aktuelle Fenster und das tatsächliche Snapchat-Verhalten müssen am Gerät bestätigt werden. Ein gefülltes violettes Beispiel war in den Aufnahmen nicht enthalten und bleibt synthetisch getestet. Details: [REFERENCE_MEDIA.md](REFERENCE_MEDIA.md).
 
 ## Noch offen: gesamter vorhandener Bestand
 

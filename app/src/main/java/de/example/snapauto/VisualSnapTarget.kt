@@ -7,19 +7,7 @@ object VisualSnapTarget {
     fun detect(pixels: IntArray, width: Int, height: Int, rows: List<Box>, density: Float): VisualIcon? {
         for (row in rows.distinct().sortedBy { it.top }) {
             val candidates = VisualEvidence.detect(pixels, width, height, listOf(row), density).filter { c ->
-                if (c.fill < 0.90 || c.bounds.width.toDouble() / c.bounds.height !in 0.85..1.17) return@filter false
-                val b = c.bounds
-                val insetX = (b.width / 5).coerceAtLeast(1)
-                val insetY = (b.height / 5).coerceAtLeast(1)
-                var colored = 0
-                var total = 0
-                for (y in b.top + insetY until b.bottom - insetY) {
-                    for (x in b.left + insetX until b.right - insetX) {
-                        total++
-                        if (VisualEvidence.snapColor(pixels[y * width + x])) colored++
-                    }
-                }
-                total > 0 && colored.toDouble() / total >= 0.98
+                SnapIconShape.classify(pixels, width, height, c.bounds) == SnapSymbol.UNOPENED_SNAP
             }
             // Multiple matching shapes in a row are ambiguous; do not choose a convenient one.
             if (candidates.size == 1) {

@@ -39,13 +39,18 @@ data class Recognition(
 data class RecognitionFacts(
     val headers: Int = 0, val filters: Int = 0, val lists: Int = 0,
     val statusLabels: Int = 0, val myAiLabels: Int = 0, val adLabels: Int = 0,
-    val statusClickable: Int = 0, val statusClickActions: Int = 0
+    val statusClickable: Int = 0, val statusClickActions: Int = 0,
+    val truncatedStatusLabels: Int = 0
 )
 
 /** Positive evidence only. A status label or colored square is never proof of an unopened Snap. */
 object ScreenRecognizer {
     const val TARGET_PACKAGE = "com.snapchat.android"
-    private val snapStatus = Regex("(?:\\d+ )?(?:neuer snap|neue snaps|new snap|new snaps)")
+    private val snapStatus = Regex("(?:\\d+\\+? )?(?:neuer snap|neue snaps|new snap|new snaps)")
+    // Visible video labels such as "4 neue…" omit the content kind. These are
+    // visual candidates only; never native click controls or proof by themselves.
+    private val clippedCount = Regex("\\d+\\+? (?:neue|new)(?:…|\\.{3})")
+    private val unreadLabel = Regex("(?:ungelesen|unread)(?: ?\\d+\\+?)?")
     private val myAi = Regex("(?:^|[^\\p{L}])my ai(?:$|[^\\p{L}])")
     private val ad = Regex("(?:^|[^\\p{L}])(?:werbung|anzeige|gesponsert|sponsored|advertisement|ad)(?:$|[^\\p{L}])")
     private fun normalized(value: String) = value.trim().lowercase(Locale.ROOT).replace(Regex("\\s+"), " ")
@@ -55,6 +60,7 @@ object ScreenRecognizer {
         node.labels.any { myAi.containsMatchIn(normalized(it)) } -> "MY_AI"
         node.labels.any { ad.containsMatchIn(normalized(it)) } -> "AD"
         node.labels.any { snapStatus.matches(normalized(it)) } -> "SNAP"
+        node.labels.any { clippedCount.matches(normalized(it)) } -> "SNAP_PARTIAL"
         else -> null
     }
 
@@ -63,7 +69,7 @@ object ScreenRecognizer {
         return snapshot.nodes.filter { node ->
             node.visible && node.enabled && node.clickable && node.canClick &&
                 node.path.isNotEmpty() && node.labels.any { snapStatus.matches(normalized(it)) } &&
-                evidence.rows.any { it.contains(node.bounds) } &&
+                evidence.rows.any { it.contains(node.bounds) && node.bounds.height <= it.height / 2 } &&
                 evidence.excludedRows.none { it.intersects(node.bounds) }
         }.sortedWith(compareBy({ it.bounds.top }, { it.bounds.left }))
     }
@@ -75,14 +81,16 @@ object ScreenRecognizer {
         fun matching(vararg labels: String) = visible.filter { node -> node.labels.any { normalized(it) in labels } }
             .distinctBy { it.bounds }
         val headers = matching("chat", "chats")
-        val filters = matching("ungelesen", "unread")
+        val filters = visible.filter { n -> n.labels.any { unreadLabel.matches(normalized(it)) } }.distinctBy { it.bounds }
         val listNodes = visible.filter { it.list }
         val statuses = visible.filter { node -> node.labels.any { snapStatus.matches(normalized(it)) } }
+        val clippedStatuses = visible.filter { node -> node.labels.any { clippedCount.matches(normalized(it)) } }
+        val visualStatuses = (statuses + clippedStatuses).distinctBy { it.index }
         val aiNodes = exposed.filter { node -> node.labels.any { myAi.containsMatchIn(normalized(it)) } }
         val adNodes = exposed.filter { node -> node.labels.any { ad.containsMatchIn(normalized(it)) } }
         val exclusions = (aiNodes + adNodes).distinctBy { it.index }
         val facts = RecognitionFacts(headers.size, filters.size, listNodes.size, statuses.size, aiNodes.size, adNodes.size,
-            statuses.count { it.clickable }, statuses.count { it.canClick })
+            statuses.count { it.clickable }, statuses.count { it.canClick }, clippedStatuses.size)
         fun unknown(reason: String) = Recognition(ScreenKind.UNKNOWN, reason = reason, facts = facts)
         fun blocked(reason: String) = Recognition(ScreenKind.BLOCKED, reason = reason, facts = facts)
         if (!snapshot.bounds.valid) return unknown("INVALID_WINDOW_BOUNDS")
@@ -107,7 +115,7 @@ object ScreenRecognizer {
         val filter = filters.singleOrNull()
         // Snapchat also labels its bottom navigation "Chat". Resolve the title
         // relative to content, never by an assumed screen height or fixed strip.
-        val anchorTop = filter?.bounds?.top ?: statuses.minOfOrNull { it.bounds.top }
+        val anchorTop = filter?.bounds?.top ?: visualStatuses.minOfOrNull { it.bounds.top }
             ?: return unknown("HEADER_OR_FILTER_AMBIGUOUS")
         val header = headers.filter { it.bounds.bottom <= anchorTop && !insideList(it) }.singleOrNull()
             ?: return unknown("HEADER_OR_FILTER_AMBIGUOUS")
@@ -159,7 +167,7 @@ object ScreenRecognizer {
             ?: return blocked("UNSCOPED_AD_OR_MY_AI") }.distinct()
         // Structure and interaction capability are independent: the real device
         // exposes full-row Snap statuses without any native click action.
-        val rows = statuses.mapNotNull { owningRow(it, boundary = contentBoundary) }
+        val rows = visualStatuses.mapNotNull { owningRow(it, boundary = contentBoundary) }
             .distinct().filter { row -> excludedRows.none { it.intersects(row) } }.take(30)
         if (filter == null && rows.isEmpty()) return unknown("NO_UNOPENED_LIST_EVIDENCE")
         return Recognition(ScreenKind.CHAT_LIST, filterState, "SEMANTIC_LIST", rows,
