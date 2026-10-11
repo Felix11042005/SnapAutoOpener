@@ -277,6 +277,7 @@ class SnapAccessibilityService : AccessibilityService() {
                 val header = hasChatHeaderAndFilter(rootInActiveWindow, w, h)
                 val composer = hasEditableComposer(rootInActiveWindow)
                 val targets = if (!composer && chip) findFilledSnapIcons(bitmap) else emptyList()
+                val statusCount = countSnapStatusNodes(rootInActiveWindow)
                 val positions = targets.take(12).joinToString(", ") {
                     "(${it.first.toInt()},${it.second.toInt()})"
                 }
@@ -284,7 +285,8 @@ class SnapAccessibilityService : AccessibilityService() {
                 prefs.edit().putInt("visual_candidates", targets.size)
                     .putInt("visual_opened", 0).putBoolean("screenshot_ok", true).apply()
                 logStep("Diagnose: screenshot=${w}x${h}, chip=$chip, header=$header, composer=$composer")
-                logStep("Erkannte Positionen (${targets.size}): " + (positions.ifEmpty { "keine" }))
+                logStep("Farbkandidaten (${targets.size}): " + (positions.ifEmpty { "keine" }))
+                logStep("Snap-Statushinweise im Accessibility-Baum: $statusCount")
                 finishBatch("Nur Diagnose: keine Tipps und keine Wischgesten ausgeführt. Bitte erkannte Positionen prüfen.")
                 batchBusy = false
                 return@takeVisualSnapshot
@@ -348,6 +350,23 @@ class SnapAccessibilityService : AccessibilityService() {
                 scheduleNext(runId, 1350L)
             }
         }
+    }
+
+    private fun countSnapStatusNodes(root: AccessibilityNodeInfo?): Int {
+        if (root == null) return 0
+        val queue = java.util.ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        var count = 0
+        var checked = 0
+        while (!queue.isEmpty() && checked++ < 900) {
+            val node = queue.removeFirst()
+            val label = (node.text?.toString().orEmpty() + " " +
+                node.contentDescription?.toString().orEmpty()).lowercase()
+            if ((label.contains("neue") && label.contains("snap")) ||
+                label.contains("new snap")) count++
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        return count
     }
 
     private fun hasSnapViewerProgress(root: AccessibilityNodeInfo?): Boolean {
