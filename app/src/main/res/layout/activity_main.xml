@@ -6,7 +6,7 @@
         <TextView android:id="@+id/title" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:textSize="24sp" android:textStyle="bold" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="12dp" android:text="Vorhandenen Snap öffnen: Öffnungsmodus bereitstellen, Snapchat-Chatliste anzeigen und dort START im Bedienfeld drücken. Bei einem erkannten ungeöffneten Snap wird dessen direktes Statusziel angeklickt oder nach zwei gleichen Bildern einmal auf sein gefülltes rotes/violettes Symbol getippt. Spätere Ziele werden nicht ergänzt. Das Verhalten muss am Gerät geprüft werden. Snapchat kann mehrere Snaps derselben Unterhaltung automatisch abspielen."
+            android:layout_marginTop="12dp" android:text="Sichtbaren Bestand öffnen: Modus bereitstellen, Snapchat-Chatliste anzeigen und dort START drücken. Bis zu 10 eindeutig erkannte sichtbare Zeilen werden beim START erfasst. Pro Zeile ein Öffnungsversuch; danach 5 Sekunden warten, einmal Android-Zurück und die Chatliste erneut prüfen. Veränderte oder verschwundene Ziele werden übersprungen. Es wird nicht gescrollt. Snapchat kann mehrere Snaps derselben Unterhaltung abspielen; einzelne alte und neue Snaps darin lassen sich nicht garantiert trennen."
             android:textSize="16sp" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="12dp" android:text="Snap untersagt nicht autorisierte automatisierte Drittanbieter-Interaktionen. Auch diese Diagnose ist nicht ausdrücklich freigegeben. Live-Nutzung bitte mit Snap klären. Offline-Tests greifen nicht auf Snapchat zu." />
@@ -16,14 +16,16 @@
             android:text="Bedienungshilfe öffnen" android:layout_marginTop="12dp" />
         <TextView android:id="@+id/serviceStatus" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="12dp" android:textIsSelectable="true" />
+        <Button android:id="@+id/startExistingSnaps" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="Sichtbaren Bestand öffnen – bereitstellen" android:layout_marginTop="16dp" />
         <Button android:id="@+id/startSingleSnap" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="Öffnungsmodus bereitstellen" android:layout_marginTop="16dp" />
+            android:text="Nur einen Snap öffnen – bereitstellen" />
         <Button android:id="@+id/startDiagnostic" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:text="START – 30 Sekunden Diagnose" android:layout_marginTop="16dp" />
         <Button android:id="@+id/stopDiagnostic" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:text="STOP – sofort beenden" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="Gewünschte Snapchat-Instanz manuell öffnen. Im Öffnungsmodus START über der sichtbaren Chatliste drücken. Fehlender oder unklarer Bestand beendet den Versuch sofort; es wird nicht auf neue Snaps gewartet. STOP bleibt im Bedienfeld erreichbar. Vorbereitung und Öffnungsversuch haben jeweils 30 Sekunden Zeitlimit. Prüfe, ob tatsächlich der gewünschte Snap angezeigt wird."
+            android:text="Gewünschte Snapchat-Instanz manuell öffnen. START über der sichtbaren Chatliste drücken. Keine späteren Zeilen werden ergänzt. STOP bleibt im Bedienfeld erreichbar, auch während der 5 Sekunden Wartezeit. Vorbereitung: 30 Sekunden; Bestandslauf: höchstens 120 Sekunden. Bei Tastatur, App-Wechsel oder unsicherer Rückkehr wird abgebrochen. Der Einzelmodus endet nach einem Öffnungsversuch."
             android:layout_marginTop="12dp" />
         <Button android:id="@+id/copyDiagnostic" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:text="Diagnose kopieren" android:layout_marginTop="12dp" />

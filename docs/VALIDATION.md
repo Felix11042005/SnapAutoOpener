@@ -2,6 +2,8 @@
 
 Stand: 11.10.2026. Ausgangspunkt: `054a5a0`, vorheriger erfolgreicher main-Build #125.
 
+- 5.6 ergänzt den endlichen sichtbaren Startbestand und eine getrennte Rückkehrberechtigung nach einer abgeschlossenen angenommenen Öffnung. Neue Tests decken native und visuelle Abläufe mit zwei ursprünglichen Zielen und einer Rückkehr dazwischen, neue/verschobene/geänderte/duplizierte Zeilen, zehn-Zeilen-Limit, Rückkehrfristen, STOP/Timeout/Neustart/Fensterwechsel an der tatsächlichen Zurück-Adaptergrenze sowie Ablehnung/Ausnahme ohne Wiederholung ab. Alle bestehenden Einzelmodus-/Erkennungs-/Bild-/Diagnoseprüfungen bleiben bestehen. Die Fünf-Sekunden-Rücknavigation und der Gesamtdurchlauf sind noch nicht auf dem Pixel getestet. Der Nutzer hat nur das tatsächliche Öffnen eines Snaps mit 5.5 bestätigt. Pipeline und Signierung bleiben unverändert; maßgeblich sind die Ergebnisse des jeweiligen Commits.
+
 - Erstprüfung der neuen Architektur auf `54e0286`: [Actions #126](https://github.com/Felix11042005/SnapAutoOpener/actions/runs/38152164479), erfolgreich. `testDebugUnitTest`, `lintDebug`, `assembleDebug` ausgeführt, APK und Validierungsberichte erzeugt.
 - Anschließend wurde die Unterscheidung zwischen unbekanntem und explizit nicht gewähltem Filter ergänzt. Die Testsuite umfasst jetzt **35 Tests**. Der Workflow prüft zusätzlich die erzeugte APK mit `apksigner verify` und protokolliert ihren SHA-256-Wert.
 - Für jeden ausgelieferten Commit sind dessen Actions-Ergebnis und die zugehörigen `validation-reports` maßgeblich. Erst nach erfolgreicher PR-Prüfung wird main aktualisiert; der main-Lauf prüft erneut und baut mit der vorhandenen Signierung.

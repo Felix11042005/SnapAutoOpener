@@ -5,6 +5,11 @@ data class VisualIcon(val row: Box, val icon: Box, val frameHash: Long = 0)
 /** Image-local coordinates. Semantic unopened status rows must be supplied by the recognizer. */
 object VisualSnapTarget {
     fun detect(pixels: IntArray, width: Int, height: Int, rows: List<Box>, density: Float): VisualIcon? {
+        return detectAll(pixels, width, height, rows, density).firstOrNull()
+    }
+
+    fun detectAll(pixels: IntArray, width: Int, height: Int, rows: List<Box>, density: Float): List<VisualIcon> {
+        val found = mutableListOf<VisualIcon>()
         for (row in rows.distinct().sortedBy { it.top }) {
             val candidates = VisualEvidence.detect(pixels, width, height, listOf(row), density).filter { c ->
                 // In the reference layout the status is below the contact name.
@@ -17,10 +22,10 @@ object VisualSnapTarget {
                 var hash = -3750763034362895579L
                 for (y in row.top until row.bottom) for (x in row.left until row.right)
                     hash = (hash xor pixels[y * width + x].toLong()) * 1099511628211L
-                return VisualIcon(row, candidates.single().bounds, hash)
+                found += VisualIcon(row, candidates.single().bounds, hash)
             }
         }
-        return null
+        return found
     }
 }
 

@@ -4,6 +4,15 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class VisualSnapTargetTest {
+    @Test fun initialImageEnumeratesAllUnambiguousRowsRatherThanOnlyFirstMatch() {
+        val pixels = IntArray(100 * 160) { 0xff222222.toInt() }
+        val rows = listOf(Box(0, 0, 100, 70), Box(0, 80, 100, 150))
+        for (top in listOf(45, 125)) for (y in top until top + 12) for (x in 20 until 32)
+            pixels[y * 100 + x] = 0xffff0033.toInt()
+        val found = VisualSnapTarget.detectAll(pixels, 100, 160, rows.reversed(), 1f)
+        assertEquals(rows, found.map { it.row })
+        assertEquals(found.first(), VisualSnapTarget.detect(pixels, 100, 160, rows, 1f))
+    }
     private val row = Box(0, 20, 100, 80)
     private fun image(color: Int = 0xffff0033.toInt(), x: Int = 20, y: Int = 50, size: Int = 12,
                       keep: (Int, Int) -> Boolean = { _, _ -> true }): IntArray {
