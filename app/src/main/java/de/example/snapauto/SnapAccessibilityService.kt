@@ -279,7 +279,9 @@ class SnapAccessibilityService : AccessibilityService() {
                 val targets = if (!composer && chip) findFilledSnapIcons(bitmap) else emptyList()
                 val statusCount = countSnapStatusNodes(rootInActiveWindow)
                 val positions = targets.take(12).joinToString(", ") {
-                    "(${it.first.toInt()},${it.second.toInt()})"
+                    val px = (it.first / w * 100f).toInt()
+                    val py = (it.second / h * 100f).toInt()
+                    "(${it.first.toInt()},${it.second.toInt()}) [${px}%,${py}%]"
                 }
                 bitmap.recycle()
                 prefs.edit().putInt("visual_candidates", targets.size)
