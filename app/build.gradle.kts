@@ -8,8 +8,8 @@ android {
         applicationId = "de.example.snapauto"
         minSdk = 26
         targetSdk = 35
-        versionCode = 27
-        versionName = "5.1-safe-diagnostics"
+        versionCode = 28
+        versionName = "5.2-safe-diagnostics"
     }
 
     val keystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
@@ -47,9 +47,11 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+    buildFeatures { buildConfig = true }
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")
