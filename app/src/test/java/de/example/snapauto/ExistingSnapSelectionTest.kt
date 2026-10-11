@@ -39,4 +39,16 @@ class ExistingSnapSelectionTest {
         assertTrue(selection.controls.isEmpty())
         assertTrue(selection.capture(s, ScreenRecognizer.inspect(s)))
     }
+    @Test fun unknownAtExplicitStartCannotWaitForLaterIncomingTarget() {
+        val selection = ExistingSnapSelection()
+        val unclear = chatFixture().let { it.copy(nodes = it.nodes.filter { n -> n.index !in listOf(2, 5) }) }
+        assertEquals(ScreenKind.UNKNOWN, ScreenRecognizer.inspect(unclear).screen)
+        assertFalse(selection.capture(unclear, ScreenRecognizer.inspect(unclear)))
+        val later = directFixture()
+        assertFalse(selection.capture(later, ScreenRecognizer.inspect(later)))
+        assertNull(selection.initial)
+        assertTrue(selection.controls.isEmpty())
+        selection.reset()
+        assertTrue(selection.capture(later, ScreenRecognizer.inspect(later)))
+    }
 }
