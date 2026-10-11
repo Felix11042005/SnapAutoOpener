@@ -29,6 +29,9 @@ class VisualSnapTargetTest {
     @Test fun centralHoleRejectsNearlyFilledDecoration() {
         assertNull(detect(image(keep = { x, y -> !(x in 5..6 && y in 5..6) })))
     }
+    @Test fun solidWideRectangleIsNotAnOpeningSymbol() {
+        assertNull(detect(image(keep = { _, y -> y < 10 })))
+    }
     @Test fun noSemanticRegionOrClippedRegionCannotProduceTarget() {
         assertNull(detect(image(), emptyList()))
         assertNull(detect(image(), listOf(Box(-1, 0, 100, 100))))

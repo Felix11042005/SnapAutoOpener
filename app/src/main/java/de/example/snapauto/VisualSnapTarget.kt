@@ -7,7 +7,7 @@ object VisualSnapTarget {
     fun detect(pixels: IntArray, width: Int, height: Int, rows: List<Box>, density: Float): VisualIcon? {
         for (row in rows.distinct().sortedBy { it.top }) {
             val candidates = VisualEvidence.detect(pixels, width, height, listOf(row), density).filter { c ->
-                if (c.fill < 0.90) return@filter false
+                if (c.fill < 0.90 || c.bounds.width.toDouble() / c.bounds.height !in 0.85..1.17) return@filter false
                 val b = c.bounds
                 val insetX = (b.width / 5).coerceAtLeast(1)
                 val insetY = (b.height / 5).coerceAtLeast(1)

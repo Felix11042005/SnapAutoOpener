@@ -16,7 +16,17 @@ class AndroidActionExecutor(
     private val currentSnapshot: () -> UiSnapshot?,
     private val report: (String) -> Unit
 ) {
-    private var inFlight = false
+    private var flightSequence = 0L
+    private var flightDeadline = 0L
+    private val inFlight get() = SystemClock.elapsedRealtime() < flightDeadline
+    private fun beginFlight(duration: Long): Long {
+        flightDeadline = SystemClock.elapsedRealtime() + duration + 2_000
+        return ++flightSequence
+    }
+    private fun finishFlight(sequence: Long) {
+        // Late callbacks from a timed-out gesture must not clear a newer gesture.
+        if (sequence == flightSequence) flightDeadline = 0
+    }
     private val opener = SingleSnapOpener(session, SystemClock::elapsedRealtime, currentSnapshot,
         SnapClickPort(::clickExactControl))
 
@@ -30,21 +40,21 @@ class AndroidActionExecutor(
                 val gesture = GestureDescription.Builder()
                     .addStroke(GestureDescription.StrokeDescription(path, 0, 80)).build()
                 if (!authorize()) false else {
-                    inFlight = true
+                    val sequence = beginFlight(80)
                     val accepted = try { service.dispatchGesture(gesture, object : AccessibilityService.GestureResultCallback() {
                         override fun onCompleted(gestureDescription: GestureDescription?) {
-                            inFlight = false
+                            finishFlight(sequence)
                             if (session.accepts(token, SystemClock.elapsedRealtime())) completed(true)
                         }
                         override fun onCancelled(gestureDescription: GestureDescription?) {
-                            inFlight = false
+                            finishFlight(sequence)
                             if (session.accepts(token, SystemClock.elapsedRealtime())) completed(false)
                         }
                     }, handler) } catch (failure: RuntimeException) {
-                        inFlight = false
+                        finishFlight(sequence)
                         throw failure
                     }
-                    if (!accepted) inFlight = false
+                    if (!accepted) finishFlight(sequence)
                     accepted
                 }
             }).open(token, request)
@@ -107,23 +117,27 @@ class AndroidActionExecutor(
         } else path.moveTo(centerX, centerY)
         val gesture = GestureDescription.Builder()
             .addStroke(GestureDescription.StrokeDescription(path, 0, duration)).build()
-        inFlight = true
-        val accepted = service.dispatchGesture(gesture, object : AccessibilityService.GestureResultCallback() {
+        val sequence = beginFlight(duration)
+        val accepted = try { service.dispatchGesture(gesture, object : AccessibilityService.GestureResultCallback() {
             override fun onCompleted(gestureDescription: GestureDescription?) {
-                inFlight = false
+                finishFlight(sequence)
                 if (session.accepts(token, SystemClock.elapsedRealtime())) {
                     report("GESTURE_COMPLETED (kein Nachweis einer Snap-Öffnung)")
                     completed()
                 }
             }
             override fun onCancelled(gestureDescription: GestureDescription?) {
-                inFlight = false
+                finishFlight(sequence)
                 if (session.accepts(token, SystemClock.elapsedRealtime())) {
                     session.stop()
                     report("GESTURE_CANCELLED")
                 }
             }
-        }, handler)
-        if (!accepted) { inFlight = false; report("GESTURE_REJECTED") }
+        }, handler) } catch (_: RuntimeException) {
+            finishFlight(sequence)
+            report("GESTURE_EXCEPTION")
+            return
+        }
+        if (!accepted) { finishFlight(sequence); report("GESTURE_REJECTED") }
     }
 }

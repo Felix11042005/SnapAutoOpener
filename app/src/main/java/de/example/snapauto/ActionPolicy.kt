@@ -4,7 +4,7 @@ enum class ActionKind { OPEN_SNAP, ADVANCE_SNAP, SCROLL_LIST, BACK }
 data class ActionRequest(val kind: ActionKind, val snapshot: UiSnapshot, val target: Box? = null,
     val nodeIndex: Int? = null, val visual: VisualTapProof? = null)
 
-/** Explicit interactive authorization, fresh screen and a direct semantic click target. */
+/** Explicit interactive authorization, fresh screen and direct status or confirmed visual evidence. */
 object ActionPolicy {
     fun rejection(session: DiagnosticSession, token: Long, now: Long,
                   request: ActionRequest, current: UiSnapshot?): String? {
