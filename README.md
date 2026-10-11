@@ -1,6 +1,6 @@
 # SnapAutoOpener
 
-Kotlin Android app, currently **5.2-safe-diagnostics** (versionCode 28).
+Kotlin Android app, currently **5.2.1-safe-diagnostics** (versionCode 29).
 
 This iteration is a manually started, 30-second diagnostic tool. START does not launch a guessed Snapchat profile. Open the intended app instance yourself. STOP is available in the activity and as an accessibility overlay. Notifications never start anything.
 
@@ -19,7 +19,9 @@ An unlocked private profile remains separate. Normal main-profile PackageManager
 
 ## Recognition and privacy
 
-Bounded accessibility snapshots feed a pure Kotlin recognizer. Exact visible DE/EN labels, selected state, list structure and element bounds replace fixed screen strips. Two stable observations are required. Missing semantics stays unknown. Editable fields, ads and My AI conservatively block capture. Colored connected components in semantic rows are only hints; they never authorize clicks.
+Bounded accessibility snapshots feed a pure Kotlin recognizer. Exact visible DE/EN labels, selected state, list structure and element bounds replace fixed screen strips. Two stable observations are required. Missing semantics stays unknown. Editable fields block capture. In a verified list, My AI and advertising rows are excluded individually from image analysis; an exclusion without a clear row still blocks capture. Interaction gates remain conservative for the entire screen. Colored connected components in semantic rows are only hints; they never authorize clicks.
+
+5.2.1 fixes the overly broad `AD_OR_MY_AI` diagnostic block observed in the first device report. Reports now distinguish unexamined rows from zero candidates and show aggregate header/filter/list evidence, node-limit and missing-child counts. No contact names or UI text are logged. See [diagnostic findings](docs/DIAGNOSTIC_FINDINGS.md).
 
 On Android 14+, optional analysis uses screenshots of the identified window only. Older systems retain tree diagnostics. Screenshot failures are not bypassed. Pixel analysis runs on a worker; late results are discarded after STOP, navigation, restart or timeout. Images and raw node labels are never persisted. Only bounded diagnostic codes/counts/positions are saved locally; copying is explicit. No credentials, private Snapchat APIs, network permission, root or hooks.
 

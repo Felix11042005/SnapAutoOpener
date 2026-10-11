@@ -8,6 +8,8 @@ data class Box(val left: Int, val top: Int, val right: Int, val bottom: Int) {
     val valid get() = width > 0 && height > 0
     fun contains(other: Box) = valid && other.valid && other.left >= left &&
         other.top >= top && other.right <= right && other.bottom <= bottom
+    fun intersects(other: Box) = valid && other.valid && left < other.right &&
+        right > other.left && top < other.bottom && bottom > other.top
 }
 
 data class UiNode(
@@ -20,44 +22,59 @@ data class UiNode(
 
 data class UiSnapshot(
     val packageName: String, val windowId: Int, val bounds: Box,
-    val nodes: List<UiNode>, val truncated: Boolean = false
+    val nodes: List<UiNode>, val truncated: Boolean = false,
+    val nodeLimitReached: Boolean = false, val missingChildren: Int = 0
 )
 
 enum class ScreenKind { UNKNOWN, BLOCKED, CHAT_LIST }
 enum class FilterState { UNKNOWN, NOT_SELECTED, SELECTED }
 data class Recognition(
     val screen: ScreenKind, val filter: FilterState = FilterState.UNKNOWN,
-    val reason: String, val rows: List<Box> = emptyList()
+    val reason: String, val rows: List<Box> = emptyList(),
+    val excludedRows: List<Box> = emptyList(), val rowsEvaluated: Boolean = false,
+    val facts: RecognitionFacts = RecognitionFacts()
+)
+
+data class RecognitionFacts(
+    val headers: Int = 0, val filters: Int = 0, val lists: Int = 0,
+    val statusLabels: Int = 0, val myAiLabels: Int = 0, val adLabels: Int = 0
 )
 
 /** Positive evidence only. A status label or colored square is never proof of an unopened Snap. */
 object ScreenRecognizer {
     const val TARGET_PACKAGE = "com.snapchat.android"
     private val snapStatus = Regex("(?:\\d+ )?(?:neuer snap|neue snaps|new snap|new snaps)")
-    private val excluded = Regex("(?:^|[^\\p{L}])(?:my ai|werbung|anzeige|gesponsert|sponsored|advertisement|ad)(?:$|[^\\p{L}])")
+    private val myAi = Regex("(?:^|[^\\p{L}])my ai(?:$|[^\\p{L}])")
+    private val ad = Regex("(?:^|[^\\p{L}])(?:werbung|anzeige|gesponsert|sponsored|advertisement|ad)(?:$|[^\\p{L}])")
     private fun normalized(value: String) = value.trim().lowercase(Locale.ROOT).replace(Regex("\\s+"), " ")
 
     fun inspect(snapshot: UiSnapshot): Recognition {
-        fun unknown(reason: String) = Recognition(ScreenKind.UNKNOWN, reason = reason)
-        if (snapshot.packageName != TARGET_PACKAGE) return unknown("WRONG_PACKAGE")
-        if (!snapshot.bounds.valid || snapshot.truncated) return unknown("INCOMPLETE_TREE")
+        if (snapshot.packageName != TARGET_PACKAGE) return Recognition(ScreenKind.UNKNOWN, reason = "WRONG_PACKAGE")
         val visible = snapshot.nodes.filter { it.visible && it.enabled && snapshot.bounds.contains(it.bounds) }
-        // An editable node anywhere visible blocks capture, including a search box (conservative).
-        if (snapshot.nodes.any { it.visible && it.editable }) {
-            return Recognition(ScreenKind.BLOCKED, reason = "EDITABLE_FIELD")
-        }
-        if (visible.any { node -> node.labels.any { excluded.containsMatchIn(normalized(it)) } }) {
-            return Recognition(ScreenKind.BLOCKED, reason = "AD_OR_MY_AI")
-        }
+        val exposed = snapshot.nodes.filter { it.visible && snapshot.bounds.intersects(it.bounds) }
         fun matching(vararg labels: String) = visible.filter { node -> node.labels.any { normalized(it) in labels } }
             .distinctBy { it.bounds }
         val headers = matching("chat", "chats")
         val filters = matching("ungelesen", "unread")
+        val listNodes = visible.filter { it.list }
+        val statuses = visible.filter { node -> node.labels.any { snapStatus.matches(normalized(it)) } }
+        val aiNodes = exposed.filter { node -> node.labels.any { myAi.containsMatchIn(normalized(it)) } }
+        val adNodes = exposed.filter { node -> node.labels.any { ad.containsMatchIn(normalized(it)) } }
+        val exclusions = (aiNodes + adNodes).distinctBy { it.index }
+        val facts = RecognitionFacts(headers.size, filters.size, listNodes.size, statuses.size, aiNodes.size, adNodes.size)
+        fun unknown(reason: String) = Recognition(ScreenKind.UNKNOWN, reason = reason, facts = facts)
+        fun blocked(reason: String) = Recognition(ScreenKind.BLOCKED, reason = reason, facts = facts)
+        if (!snapshot.bounds.valid) return unknown("INVALID_WINDOW_BOUNDS")
+        if (snapshot.truncated || snapshot.nodeLimitReached || snapshot.missingChildren > 0) return unknown("INCOMPLETE_TREE")
+        // An editable node anywhere visible blocks capture, including a search box (conservative).
+        if (snapshot.nodes.any { it.visible && it.editable }) {
+            return blocked("EDITABLE_FIELD")
+        }
         if (headers.size != 1 || filters.size != 1) return unknown("HEADER_OR_FILTER_AMBIGUOUS")
         val header = headers.single()
         val filter = filters.single()
         if (header.bounds.bottom > filter.bounds.top) return unknown("HEADER_FILTER_ORDER")
-        val lists = visible.filter { it.list && it.bounds.bottom > filter.bounds.bottom }
+        val lists = listNodes.filter { it.bounds.bottom > filter.bounds.bottom }
         if (lists.isEmpty()) return unknown("NO_LIST_STRUCTURE")
         val filterState = when {
             filter.selected -> FilterState.SELECTED
@@ -65,21 +82,34 @@ object ScreenRecognizer {
             else -> FilterState.UNKNOWN
         }
         val byIndex = snapshot.nodes.associateBy { it.index }
-        val rows = visible.filter { node -> node.labels.any { snapStatus.matches(normalized(it)) } }
-            .mapNotNull { status ->
-                if (status.bounds.top < filter.bounds.bottom) return@mapNotNull null
-                var current: UiNode? = status
-                var row: Box? = null
-                repeat(8) {
-                    val node = current ?: return@repeat
-                    if (row == null && node.clickable && !node.list && node.bounds.contains(status.bounds) &&
-                        node.bounds.height <= snapshot.bounds.height / 3 &&
-                        lists.any { it.bounds.contains(node.bounds) }) row = node.bounds
-                    current = node.parent?.let(byIndex::get)
+        // A whole row must be a bounded child of an actual list ancestor. A clickable
+        // nested label is not a row: siblings (e.g. My AI + status) must stay together.
+        fun owningRow(start: UiNode, requireClickable: Boolean): Box? {
+            var current: UiNode? = start
+            var clickable = false
+            val visited = mutableSetOf<Int>()
+            repeat(16) {
+                val node = current ?: return null
+                if (!visited.add(node.index) || !node.visible || !node.bounds.contains(start.bounds)) return null
+                clickable = clickable || node.clickable
+                val parent = node.parent?.let(byIndex::get) ?: return null
+                if (lists.any { it.index == parent.index }) {
+                    return node.bounds.takeIf {
+                        !node.list && it.top >= filter.bounds.bottom &&
+                            it.height <= snapshot.bounds.height / 3 && parent.bounds.contains(it) &&
+                            (!requireClickable || clickable)
+                    }
                 }
-                row
-            }.distinct().take(30)
-        return Recognition(ScreenKind.CHAT_LIST, filterState, "SEMANTIC_LIST", rows)
+                current = parent
+            }
+            return null
+        }
+        val excludedRows = exclusions.map { owningRow(it, requireClickable = false)
+            ?: return blocked("UNSCOPED_AD_OR_MY_AI") }.distinct()
+        val rows = statuses.mapNotNull { owningRow(it, requireClickable = true) }
+            .distinct().filter { row -> excludedRows.none { it.intersects(row) } }.take(30)
+        return Recognition(ScreenKind.CHAT_LIST, filterState, "SEMANTIC_LIST", rows,
+            excludedRows, rowsEvaluated = true, facts = facts)
     }
 }
 

@@ -12,6 +12,8 @@ object ActionPolicy {
         if (current == null || current != request.snapshot) return "STALE_SCREEN"
         val evidence = ScreenRecognizer.inspect(current)
         if (evidence.screen != ScreenKind.CHAT_LIST || evidence.filter != FilterState.SELECTED) return "UNVERIFIED_SCREEN"
+        // Row-scoped exclusion is for read-only diagnosis, not a relaxation of actions.
+        if (evidence.excludedRows.isNotEmpty()) return "EXCLUDED_CONTENT_VISIBLE"
         return when (request.kind) {
             ActionKind.OPEN_SNAP -> "UNOPENED_SNAP_NOT_VERIFIED"
             ActionKind.ADVANCE_SNAP, ActionKind.BACK -> "VIEWER_NOT_VERIFIED"
