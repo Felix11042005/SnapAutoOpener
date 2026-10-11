@@ -1,11 +1,11 @@
-# Pixel-8-Abnahme: 5.2-safe-diagnostics
+# Pixel-8-Abnahme: 5.2.1-safe-diagnostics
 
 Diese Tests wurden nicht auf einem echten Pixel durchgeführt. Unit-Tests verwenden ausschließlich synthetische Daten. Sie belegen weder Snapchat-Erkennungsqualität noch Private-Space-Kompatibilität oder Vertragskonformität. Live-Nutzung mit Snap klären (siehe Bestandsaufnahme).
 
 ## Installation und Profil
 
 1. Neueste erfolgreiche **Build APK**-Ausführung für main öffnen, Commit prüfen, unter **Artifacts → SnapAutoOpener-apk** die ZIP laden und `SnapAutoOpener.apk` entpacken. PR-Artifacts sind Debug-Validierungsbuilds, main verwendet wie bisher vorhandene Signiersecrets. Nicht zum Umgehen eines Signaturfehlers blind deinstallieren; den passenden signierten main-Build verwenden.
-2. Android-Version, Snapchat-Version, Sprache, Theme, Schrift-/Displaygröße und Installationsprofil notieren. APK zeigt 5.2-safe-diagnostics (28).
+2. Android-Version, Snapchat-Version, Sprache, Theme, Schrift-/Displaygröße und Installationsprofil notieren. APK zeigt 5.2.1-safe-diagnostics (29).
 3. Bedienungshilfe in den Android-Einstellungen aktivieren, soweit Android dies für diese Installation zulässt. Kein Benachrichtigungszugriff nötig. Wenn Android eine Aktivierung verhindert: Ergebnis notieren; keine Profil-/Sicherheitsumgehung.
 4. Hauptprofil und entsperrtes Private Space getrennt prüfen. Eine Paket-Sichtbarkeitsmeldung beweist nicht, welche Profilkopie beobachtet wird. Im Private Space installierte Dienstkopie kann andere Möglichkeiten haben; nicht als bereits unterstützt voraussetzen.
 
@@ -28,7 +28,8 @@ Diese Tests wurden nicht auf einem echten Pixel durchgeführt. Unit-Tests verwen
 - Chatliste mit semantisch sichtbarem Header, Filter und Listenstruktur: `CHAT_LIST`; zwei identische Beobachtungen nötig. Fehlende/mehrdeutige Merkmale: `UNKNOWN`, keine geschätzten Ersatzkoordinaten.
 - Ungelesen aus/an vergleichen: `SELECTED` nur bei positiv gemeldeter Auswahl; `NOT_SELECTED` nur bei explizit prüfbarem, nicht aktiviertem Steuerelement. Sonst `UNKNOWN`. Liefert Snapchat keine Auswahlsemantik, gibt es keine Bilddiagnose. Bitte genau diesen Fall melden.
 - Normalen Chat, Suche, Snap-Ansicht und Tastatur manuell öffnen: editierbare Felder sperren; fehlende Listenevidenz bleibt unbekannt. Es gibt keine automatische Rücknavigation.
-- Sichtbare Werbung oder My AI: konservative Sperre der ganzen Aufnahme. Auch harmlose Inhalte können diese Sperre auslösen. Keine Bedienung dieser Elemente.
+- Sichtbare Werbung oder My AI: In einer verifizierten Chatliste wird die vollständige zugehörige Listenzeile von der Bildauswertung ausgeschlossen; andere Zeilen dürfen diagnostiziert werden. Fehlt die eindeutige Zuordnung, bleibt `UNSCOPED_AD_OR_MY_AI` eine Sperre der Aufnahme. Keine Bedienung dieser Elemente.
+- `INCOMPLETE_TREE`: Knotenanzahl, Knotenlimit und fehlende Kinder im Bericht vergleichen. Vorzeitig gesperrte Erkennung meldet `Status-Zeilen=nicht ausgewertet`; dies ist kein Nachweis einer leeren Chatliste.
 - Helles/dunkles Theme, große Schrift, Drehung, Displayzoom, Split-Screen testen. Geänderte Geometrie setzt Stabilität zurück. Abweichende Bild-/Fenstergröße: `GEOMETRY_MISMATCH`, keine Positionszuordnung.
 - Rote/lila gefüllte Quadrate sind **Farbhinweise**, keine bestätigten Snaps. Blaue Symbole, Umrisse und große Avatare sollen im synthetischen Test aussortiert werden. Gleichförmige Dekorationen bleiben ein bekannter Fehlpositivfall.
 - API <34: ausschließlich Baumdiagnose, kein Display-Screenshot-Fallback. Sichere Fenster/Screenshotfehler werden respektiert; maximal drei Fehler bzw. 5-s-Aufnahmetimeout.

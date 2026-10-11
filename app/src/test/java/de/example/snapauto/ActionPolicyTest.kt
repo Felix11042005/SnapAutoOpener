@@ -27,4 +27,10 @@ class ActionPolicyTest {
         for (kind in listOf(ActionKind.OPEN_SNAP, ActionKind.ADVANCE_SNAP, ActionKind.BACK))
             assertNotNull(ActionPolicy.rejection(s, token, 1, ActionRequest(kind, snapshot), snapshot))
     }
+    @Test fun rowScopedDiagnosticsDoNotRelaxInteractionExclusions() {
+        val s = DiagnosticSession(); val token = s.start(0, mode = SessionMode.INTERACTIVE)
+        val snapshot = withExcludedRow()
+        assertEquals("EXCLUDED_CONTENT_VISIBLE", ActionPolicy.rejection(s, token, 1,
+            ActionRequest(ActionKind.SCROLL_LIST, snapshot, snapshot.nodes[3].bounds), snapshot))
+    }
 }

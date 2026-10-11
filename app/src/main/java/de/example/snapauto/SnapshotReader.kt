@@ -14,6 +14,8 @@ object SnapshotReader {
         val windowId = root.windowId
         queue.add(root to null)
         var truncated = false
+        var nodeLimitReached = false
+        var missingChildren = 0
         try {
             while (queue.isNotEmpty() && nodes.size < LIMIT) {
                 val (node, parent) = queue.removeFirst()
@@ -31,18 +33,19 @@ object SnapshotReader {
                                 node.className?.contains("ListView") == true)),
                         selectionKnown = node.isCheckable)
                     val remaining = (LIMIT - nodes.size - queue.size).coerceAtLeast(0)
-                    if (node.childCount > remaining) truncated = true
+                    if (node.childCount > remaining) { truncated = true; nodeLimitReached = true }
                     for (i in 0 until minOf(node.childCount, remaining)) {
                         val child = node.getChild(i)
-                        if (child != null) queue.add(child to index) else truncated = true
+                        if (child != null) queue.add(child to index) else { truncated = true; missingChildren++ }
                     }
                 } finally { node.recycle() }
             }
         } finally {
-            if (queue.isNotEmpty()) truncated = true
+            if (queue.isNotEmpty()) { truncated = true; nodeLimitReached = true }
             queue.forEach { it.first.recycle() }
         }
         return UiSnapshot(pkg, windowId,
-            Box(windowBounds.left, windowBounds.top, windowBounds.right, windowBounds.bottom), nodes, truncated)
+            Box(windowBounds.left, windowBounds.top, windowBounds.right, windowBounds.bottom),
+            nodes, truncated, nodeLimitReached, missingChildren)
     }
 }

@@ -147,8 +147,8 @@ class SnapAccessibilityService : AccessibilityService() {
         }
         val evidence = ScreenRecognizer.inspect(snap)
         val stable = stability.observe(snap)
-        recordOnce("${evidence.reason}/${evidence.filter}/${evidence.rows.size}/$stable",
-            "Bildschirm=${evidence.screen}; Filter=${evidence.filter}; Status-Zeilen=${evidence.rows.size}; stabil=$stable")
+        val description = RecognitionReport.describe(snap, evidence, stable)
+        recordOnce(evidence.reason, description)
         if (!stable || evidence.screen != ScreenKind.CHAT_LIST || evidence.filter != FilterState.SELECTED || evidence.rows.isEmpty()) return
         if (Build.VERSION.SDK_INT < 34) {
             recordOnce("WINDOW_SCREENSHOT_UNAVAILABLE", "Bilddiagnose benötigt Android 14; Baumdiagnose bleibt verfügbar.")
@@ -236,8 +236,9 @@ class SnapAccessibilityService : AccessibilityService() {
     }
 
     private fun recordOnce(code: String, detail: String) {
-        if (code == lastCode) return
-        lastCode = code
+        val key = "$code|$detail"
+        if (key == lastCode) return
+        lastCode = key
         record(code, detail)
     }
     private fun record(code: String, detail: String) {

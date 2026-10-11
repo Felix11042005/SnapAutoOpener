@@ -12,6 +12,15 @@ internal fun chatFixture() = UiSnapshot(ScreenRecognizer.TARGET_PACKAGE, 12, Box
     UiNode(5, 4, listOf("Neuer Snap"), Box(100, 310, 300, 350))
 ))
 
+internal fun withExcludedRow(label: String = "My AI"): UiSnapshot {
+    val s = chatFixture()
+    return s.copy(nodes = s.nodes + listOf(
+        UiNode(6, 3, emptyList(), Box(0, 420, 1000, 580), clickable = true),
+        UiNode(7, 6, listOf(label), Box(100, 430, 300, 470)),
+        UiNode(8, 6, listOf("Neuer Snap"), Box(100, 500, 300, 540), clickable = true)
+    ))
+}
+
 class RecognitionTest {
     private fun recognize(s: UiSnapshot) = ScreenRecognizer.inspect(s)
     @Test fun semanticListFindsRowWithoutFixedCoordinates() {
@@ -61,6 +70,54 @@ class RecognitionTest {
             val s = chatFixture()
             assertEquals(label, ScreenKind.BLOCKED, recognize(s.copy(nodes = s.nodes +
                 UiNode(6, 0, listOf(label), Box(0, 400, 900, 500)))).screen)
+        }
+    }
+    @Test fun myAiRowIsExcludedWhileOrdinaryRowRemains() {
+        val r = recognize(withExcludedRow())
+        assertEquals(ScreenKind.CHAT_LIST, r.screen)
+        assertEquals(listOf(Box(0, 240, 1000, 400)), r.rows)
+        assertEquals(listOf(Box(0, 420, 1000, 580)), r.excludedRows)
+        assertEquals(2, r.facts.statusLabels)
+        assertEquals(1, r.facts.myAiLabels)
+        assertTrue(r.rowsEvaluated)
+    }
+    @Test fun advertisingRowIsExcludedWithoutBlockingOtherRows() {
+        val r = recognize(withExcludedRow("Gesponsert"))
+        assertEquals(ScreenKind.CHAT_LIST, r.screen)
+        assertEquals(1, r.rows.size)
+        assertEquals(1, r.excludedRows.size)
+        assertEquals(1, r.facts.adLabels)
+    }
+    @Test fun clickableStatusChildDoesNotEscapeSiblingExclusion() {
+        val r = recognize(withExcludedRow())
+        assertFalse(r.rows.any { it.intersects(Box(100, 500, 300, 540)) })
+    }
+    @Test fun overlappingRowsAreConservativelyExcluded() {
+        val s = withExcludedRow()
+        val nodes = s.nodes.map { if (it.index == 4) it.copy(bounds = Box(0, 240, 1000, 450)) else it }
+        assertTrue(recognize(s.copy(nodes = nodes)).rows.isEmpty())
+    }
+    @Test fun disabledMyAiLabelStillExcludesItsRow() {
+        val s = withExcludedRow()
+        val nodes = s.nodes.map { if (it.index == 7) it.copy(enabled = false) else it }
+        assertEquals(1, recognize(s.copy(nodes = nodes)).excludedRows.size)
+    }
+    @Test fun partiallyClippedUnscopedExclusionStillBlocksCapture() {
+        val s = chatFixture()
+        val r = recognize(s.copy(nodes = s.nodes + UiNode(6, 0, listOf("My AI"), Box(-10, 420, 500, 580))))
+        assertEquals("UNSCOPED_AD_OR_MY_AI", r.reason)
+        assertFalse(r.rowsEvaluated)
+    }
+    @Test fun cyclicRowAncestryCannotAuthorizeCapture() {
+        val s = withExcludedRow()
+        val nodes = s.nodes.map { if (it.index == 6) it.copy(parent = 6) else it }
+        assertEquals(ScreenKind.BLOCKED, recognize(s.copy(nodes = nodes)).screen)
+    }
+    @Test fun incompleteTreeCountsDoNotRelaxRecognition() {
+        for (s in listOf(chatFixture().copy(nodeLimitReached = true), chatFixture().copy(missingChildren = 1))) {
+            val r = recognize(s)
+            assertEquals("INCOMPLETE_TREE", r.reason)
+            assertFalse(r.rowsEvaluated)
         }
     }
     @Test fun wrongPackageAndTruncatedTreeRejected() {
