@@ -248,7 +248,7 @@ class SnapAccessibilityService : AccessibilityService() {
             val h = bitmap.height
             prefs.edit().putBoolean("screenshot_ok", true).apply()
             if (batchPhase == 0) {
-                // V4.8: User activates "Ungelesen" manually BEFORE START.
+                // V4.9: User activates "Ungelesen" manually BEFORE START.
                 // Never tap a guessed filter location.
                 val root = rootInActiveWindow
                 val composer = hasEditableComposer(root)
@@ -272,49 +272,21 @@ class SnapAccessibilityService : AccessibilityService() {
                 return@takeVisualSnapshot
             }
             if (batchPhase == 1) {
-                if (!(hasChatHeaderAndFilter(rootInActiveWindow, w, h) ||
-                    (filterVerifiedByChange && detectUnreadChip(bitmap) != null)) ||
-                    hasEditableComposer(rootInActiveWindow)) {
-                    logStep("Chatlisten-Check: visualFilter=" + (detectUnreadChip(bitmap) != null) + ", accessibilityFilter=" + hasChatHeaderAndFilter(rootInActiveWindow, w, h) + ", verified=" + filterVerifiedByChange + ", composer=" + hasEditableComposer(rootInActiveWindow))
-                    bitmap.recycle()
-                    finishBatch("Chatansicht vor Snap-Erkennung nicht sicher sichtbar.")
-                    batchBusy = false
-                    return@takeVisualSnapshot
+                // V4.9 diagnostic-only: absolutely no taps, swipes or viewer actions.
+                val chip = detectUnreadChip(bitmap) != null
+                val header = hasChatHeaderAndFilter(rootInActiveWindow, w, h)
+                val composer = hasEditableComposer(rootInActiveWindow)
+                val targets = if (!composer && chip) findFilledSnapIcons(bitmap) else emptyList()
+                val positions = targets.take(12).joinToString(", ") {
+                    "(${it.first.toInt()},${it.second.toInt()})"
                 }
-                val targets = findFilledSnapIcons(bitmap)
                 bitmap.recycle()
-                prefs.edit().putInt("visual_candidates", targets.size).putBoolean("screenshot_ok", true).apply()
-                val target = targets.firstOrNull { candidate ->
-                    batchSeenY.none { kotlin.math.abs(it - candidate.second) < 48f }
-                }
-                if (target == null) {
-                    if (scrollCount++ < 2) {
-                        batchSeenY.clear()
-                        logStep("Chatliste scrollen")
-                        scrollChatList { batchBusy = false; scheduleNext(runId, 1250L) }
-                    } else {
-                        finishBatch("Keine weiteren gefüllten Snap-Symbole.")
-                        batchBusy = false
-                    }
-                    return@takeVisualSnapshot
-                }
-                batchSeenY.add(target.second)
-                batchPhase = 2
-                viewerBackPending = false
-                viewerBackAttempts = 0
-                chatReturnChecks = 0
-                viewerStartedAt = System.currentTimeMillis()
-                viewerTaps = 0
-                unchangedViewerFrames = 0
-                lastViewerSignature = 0L
-                prefs.edit().putString("visual_status", "Öffne Snap bei (${target.first.toInt()},${target.second.toInt()}).").apply()
-                tap(target.first, target.second) {
-                    if (!isBatchActive(runId)) { batchBusy = false; return@tap }
-                    SnapState.openedInBatch++
-                    prefs.edit().putInt("visual_opened", SnapState.openedInBatch).apply()
-                    batchBusy = false
-                    handler.postDelayed({ if (isBatchActive(runId)) runManualBatch() }, 1400L)
-                }
+                prefs.edit().putInt("visual_candidates", targets.size)
+                    .putInt("visual_opened", 0).putBoolean("screenshot_ok", true).apply()
+                logStep("Diagnose: screenshot=${w}x${h}, chip=$chip, header=$header, composer=$composer")
+                logStep("Erkannte Positionen (${targets.size}): " + (positions.ifEmpty { "keine" }))
+                finishBatch("Nur Diagnose: keine Tipps und keine Wischgesten ausgeführt. Bitte erkannte Positionen prüfen.")
+                batchBusy = false
                 return@takeVisualSnapshot
             }
             // A video can have static dark areas that resemble chat separators.
@@ -525,14 +497,14 @@ class SnapAccessibilityService : AccessibilityService() {
         trace.add(message)
         if (trace.size > 20) trace.removeAt(0)
         prefs.edit().putString("visual_status", message)
-            .putString("diagnostic_report", "V4.8 Ablauf:\n" + trace.joinToString("\n")).apply()
+            .putString("diagnostic_report", "V4.9 Ablauf:\n" + trace.joinToString("\n")).apply()
     }
 
     private fun finishBatch(reason: String) {
         SnapState.batchMode = false
         prefs.edit()
             .putString("visual_status", "Durchlauf beendet: $reason")
-            .putString("diagnostic_report", "V4.8: $reason\nChat-Öffnungsversuche: ${SnapState.openedInBatch}; Viewer-Weiter-Tipps: $viewerAdvanceTotal.\n" + trace.joinToString("\n"))
+            .putString("diagnostic_report", "V4.9: $reason\nChat-Öffnungsversuche: ${SnapState.openedInBatch}; Viewer-Weiter-Tipps: $viewerAdvanceTotal.\n" + trace.joinToString("\n"))
             .apply()
     }
 
