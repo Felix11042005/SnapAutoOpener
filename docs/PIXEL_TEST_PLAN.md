@@ -1,11 +1,13 @@
-# Pixel-8-Abnahme: 5.2.1-safe-diagnostics
+# Pixel-8-Abnahme: 5.4-visual-single-snap
 
 Diese Tests wurden nicht auf einem echten Pixel durchgeführt. Unit-Tests verwenden ausschließlich synthetische Daten. Sie belegen weder Snapchat-Erkennungsqualität noch Private-Space-Kompatibilität oder Vertragskonformität. Live-Nutzung mit Snap klären (siehe Bestandsaufnahme).
+
+Der echte Öffnungsversuch und seine zusätzlichen Bildprüfungen sind in [OPENING_MODE.md](OPENING_MODE.md) beschrieben. Die folgenden Erkennungsprüfungen beziehen sich auf den separat wählbaren Diagnosemodus; dieser muss ohne Bedienaktionen bleiben.
 
 ## Installation und Profil
 
 1. Neueste erfolgreiche **Build APK**-Ausführung für main öffnen, Commit prüfen, unter **Artifacts → SnapAutoOpener-apk** die ZIP laden und `SnapAutoOpener.apk` entpacken. PR-Artifacts sind Debug-Validierungsbuilds, main verwendet wie bisher vorhandene Signiersecrets. Nicht zum Umgehen eines Signaturfehlers blind deinstallieren; den passenden signierten main-Build verwenden.
-2. Android-Version, Snapchat-Version, Sprache, Theme, Schrift-/Displaygröße und Installationsprofil notieren. APK zeigt 5.2.1-safe-diagnostics (29).
+2. Android-Version, Snapchat-Version, Sprache, Theme, Schrift-/Displaygröße und Installationsprofil notieren. APK zeigt 5.4-visual-single-snap (33).
 3. Bedienungshilfe in den Android-Einstellungen aktivieren, soweit Android dies für diese Installation zulässt. Kein Benachrichtigungszugriff nötig. Wenn Android eine Aktivierung verhindert: Ergebnis notieren; keine Profil-/Sicherheitsumgehung.
 4. Hauptprofil und entsperrtes Private Space getrennt prüfen. Eine Paket-Sichtbarkeitsmeldung beweist nicht, welche Profilkopie beobachtet wird. Im Private Space installierte Dienstkopie kann andere Möglichkeiten haben; nicht als bereits unterstützt voraussetzen.
 
@@ -14,7 +16,7 @@ Diese Tests wurden nicht auf einem echten Pixel durchgeführt. Unit-Tests verwen
 | Test | Erwartung |
 |---|---|
 | Bedienungshilfe aus | START deaktiviert, keine alte Heartbeat-Meldung als verbunden |
-| START in SnapAutoOpener | Snapchat startet nicht selbst; STOP-Overlay erscheint; 30-s-Frist beginnt |
+| Diagnose-START in SnapAutoOpener | Snapchat startet nicht selbst; STOP-Overlay erscheint; 30-s-Frist beginnt |
 | Ohne Snapchat warten | Timeout auch ohne ein einziges Snapchat-Event, Overlay verschwindet |
 | Gewünschte Snapchat-Kopie selbst im Launcher öffnen | Diagnose nur, wenn deren Fenster tatsächlich für den Dienst sichtbar ist |
 | Overlay-STOP während Aufnahme; danach erneut START | Alter Bericht/Callback verändert neuen Lauf nicht; keine Aktion |
@@ -36,8 +38,8 @@ Diese Tests wurden nicht auf einem echten Pixel durchgeführt. Unit-Tests verwen
 
 ## Bericht zurückgeben
 
-Über „Diagnose kopieren“ den Bericht mit Geräte-/Layoutangaben und beobachtetem Soll-/Ist-Verhalten übermitteln. Der Bericht enthält keine Kontakte, Texte, Bilder oder Accountdaten. Bitte selbst keine Namen/Snap-Inhalte hinzufügen. Rohtexte werden nur flüchtig im Speicher für die Erkennung verarbeitet. In allen Tests müssen automatisch ausgeführte Bedienaktionen **0** bleiben.
+Über „Diagnose kopieren“ den Bericht mit Geräte-/Layoutangaben und beobachtetem Soll-/Ist-Verhalten übermitteln. Der Bericht enthält keine Kontakte, Texte, Bilder oder Accountdaten. Bitte selbst keine Namen/Snap-Inhalte hinzufügen. Rohtexte werden nur flüchtig im Speicher für die Erkennung verarbeitet. In den Diagnoseprüfungen müssen Bedienaktionen **0** bleiben. Der separat gestartete Öffnungsversuch darf höchstens einen Klick/Tipp ausführen; Android-Annahme ist kein Nachweis der Snap-Öffnung.
 
 ## Bewusste Grenzen
 
-STOP verhindert neue Anforderungen und verwirft verspätete Ergebnisse. Bereits vom Betriebssystem angenommene Aufnahmen können nicht rückwirkend gelöscht werden, ihr Ergebnis wird freigegeben/verworfen. Bei einer späteren interaktiven Freigabe gilt entsprechend: bereits dispatchte kurze Gesten sind nicht synchron zurückrufbar. Diese Version dispatcht überhaupt keine Gesten. Overlay-Erreichbarkeit, Pixel-Latenz und Profilzugriff sind erst nach Gerätetest belegt.
+STOP verhindert neue Anforderungen und verwirft verspätete Ergebnisse. Bereits vom Betriebssystem angenommene Aufnahmen können nicht rückwirkend gelöscht werden, ihr Ergebnis wird freigegeben/verworfen. Im Öffnungsmodus gilt entsprechend: ein bereits an Android übergebener kurzer Tipp ist nicht synchron zurückrufbar. Der Diagnosemodus dispatcht keine Gesten. Overlay-Erreichbarkeit, Pixel-Latenz und Profilzugriff sind erst nach Gerätetest belegt.
