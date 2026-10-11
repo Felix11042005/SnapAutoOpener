@@ -6,7 +6,7 @@
         <TextView android:id="@+id/title" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:textSize="24sp" android:textStyle="bold" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="12dp" android:text="Einen vorhandenen Snap öffnen: Der Öffnungsmodus erfasst die zuerst erkannte sichtbare Chatliste und klickt höchstens ein direktes Snap-Statusziel. Spätere Ziele werden nicht ergänzt. Bei einer Änderung stoppt der Lauf. Mehrere Snaps automatisch abzuarbeiten ist noch nicht verfügbar."
+            android:layout_marginTop="12dp" android:text="Einen vorhandenen Snap öffnen: Öffnungsmodus bereitstellen, Snapchat-Chatliste anzeigen und dort START im schwebenden Bedienfeld drücken. Dabei wird der sichtbare Bestand erfasst und höchstens ein direktes Snap-Statusziel angeklickt. Spätere Ziele werden nicht ergänzt. Mehrere Snaps automatisch abzuarbeiten ist noch nicht verfügbar."
             android:textSize="16sp" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="12dp" android:text="Snap untersagt nicht autorisierte automatisierte Drittanbieter-Interaktionen. Auch diese Diagnose ist nicht ausdrücklich freigegeben. Live-Nutzung bitte mit Snap klären. Offline-Tests greifen nicht auf Snapchat zu." />
@@ -17,13 +17,13 @@
         <TextView android:id="@+id/serviceStatus" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="12dp" android:textIsSelectable="true" />
         <Button android:id="@+id/startSingleSnap" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="START – einen Snap öffnen" android:layout_marginTop="16dp" />
+            android:text="Öffnungsmodus bereitstellen" android:layout_marginTop="16dp" />
         <Button android:id="@+id/startDiagnostic" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:text="START – 30 Sekunden Diagnose" android:layout_marginTop="16dp" />
         <Button android:id="@+id/stopDiagnostic" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:text="STOP – sofort beenden" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="Nach START die gewünschte Snapchat-Instanz manuell öffnen und die Chatliste anzeigen. STOP erscheint über der App. Ein fehlendes oder mehrdeutiges Klickziel beendet den Lauf spätestens nach 30 Sekunden. Prüfe beim ersten Öffnungsversuch, ob tatsächlich der gewünschte Snap angezeigt wird."
+            android:text="Gewünschte Snapchat-Instanz manuell öffnen. Im Öffnungsmodus START über der sichtbaren Chatliste drücken. Fehlender oder unklarer Bestand beendet den Versuch sofort; es wird nicht auf neue Snaps gewartet. STOP bleibt im Bedienfeld erreichbar. Vorbereitung und Öffnungsversuch haben jeweils 30 Sekunden Zeitlimit. Prüfe, ob tatsächlich der gewünschte Snap angezeigt wird."
             android:layout_marginTop="12dp" />
         <Button android:id="@+id/copyDiagnostic" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:text="Diagnose kopieren" android:layout_marginTop="12dp" />

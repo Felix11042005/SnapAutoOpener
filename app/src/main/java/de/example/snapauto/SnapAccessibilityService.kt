@@ -12,10 +12,12 @@ import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
 import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityWindowInfo
 import android.widget.Button
+import android.widget.LinearLayout
 import java.util.concurrent.Executors
 import kotlin.math.roundToInt
 
@@ -34,7 +36,7 @@ class SnapAccessibilityService : AccessibilityService() {
     private var lastSample = -10_000L
     private var frameEpoch = 0L
     private var pending: Capture? = null
-    private var stopButton: Button? = null
+    private var stopButton: View? = null
     private var lastCode = ""
     private var failures = 0
     var status = "Bereit. Diagnose nur nach START."
@@ -69,15 +71,40 @@ class SnapAccessibilityService : AccessibilityService() {
         lastSample = -10_000L
         failures = 0
         lastCode = ""
-        status = "30 Sekunden: gewünschte Snapchat-Instanz manuell öffnen."
+        status = if (mode == SessionMode.INTERACTIVE)
+            "Chatliste öffnen, dann START im schwebenden Bedienfeld drücken (30 Sekunden)."
+            else "30 Sekunden: gewünschte Snapchat-Instanz manuell öffnen."
         record("START", if (mode == SessionMode.INTERACTIVE)
-            "Echter Öffnungsmodus: maximal ein direkter Snap-Statusklick. Gewünschte Chatliste manuell öffnen."
+            "Öffnungsmodus bereitgestellt; noch keine Bestandsaufnahme. Chatliste öffnen und START im Bedienfeld drücken."
             else "Diagnose: keine Bedienaktionen. Gewünschte Chatliste manuell öffnen.")
         if (!showStopOverlay()) {
             stopDiagnostic("STOP-Overlay nicht verfügbar; Lauf nicht gestartet.")
             return
         }
         handler.post(tick)
+    }
+
+    private fun captureExistingForOpening() {
+        val now = SystemClock.elapsedRealtime()
+        if (!session.accepts(session.generation, now) || session.mode != SessionMode.INTERACTIVE ||
+            existingSelection.initial != null) return
+        val snap = actionSnapshot()
+        val evidence = snap?.let(ScreenRecognizer::inspect)
+        if (snap == null || evidence == null || !existingSelection.capture(snap, evidence)) {
+            stopDiagnostic("START: sichtbarer Bestand nicht eindeutig erkennbar; kein Warten auf spätere Ziele.")
+            return
+        }
+        record("INITIAL_SELECTION", "Bestand beim START im Bedienfeld: ${existingSelection.controls.size} direkte Snap-Klickziele. Keine späteren Ziele aufnehmen.")
+        if (existingSelection.controls.isEmpty()) {
+            stopDiagnostic("Bestand ohne direkt anklickbaren Snap-Status; kein Klick ausgeführt.")
+            return
+        }
+        // The actual opening session begins at the in-Snapchat START, not when
+        // the user is still choosing the app/profile. No future target discovery.
+        session.start(now, mode = SessionMode.INTERACTIVE)
+        stability.reset()
+        stability.observe(snap)
+        status = "Vorhandenes Snap-Ziel erfasst; warte auf unveränderte Bestätigung."
     }
 
     fun stopDiagnostic(reason: String = "STOP durch Nutzer", save: Boolean = true) {
@@ -151,6 +178,10 @@ class SnapAccessibilityService : AccessibilityService() {
         val snap = snapshot()
         if (snap == null) {
             stability.reset()
+            if (session.mode == SessionMode.INTERACTIVE && existingSelection.initial != null) {
+                stopDiagnostic("Zielfenster nach Bestandserfassung verlassen oder Tastatur geöffnet.")
+                return
+            }
             recordOnce("NO_TARGET", "Kein eindeutig aktives Snapchat-Fenster ohne Tastatur sichtbar.")
             return
         }
@@ -159,18 +190,12 @@ class SnapAccessibilityService : AccessibilityService() {
         val description = RecognitionReport.describe(snap, evidence, stable)
         recordOnce(evidence.reason, description)
         if (session.mode == SessionMode.INTERACTIVE) {
+            if (existingSelection.initial == null) return
             if (evidence.screen == ScreenKind.BLOCKED) {
                 stopDiagnostic("Sicherheitsstopp: ${evidence.reason}")
                 return
             }
-            if (existingSelection.capture(snap, evidence)) {
-                record("INITIAL_SELECTION", "Erster erkannter sichtbarer Bestand: ${existingSelection.controls.size} direkte Snap-Klickziele. Keine späteren Ziele aufnehmen.")
-                if (existingSelection.controls.isEmpty()) {
-                    stopDiagnostic("Bestand ohne direkt anklickbaren Snap-Status; kein Klick ausgeführt.")
-                    return
-                }
-            }
-            if (existingSelection.initial != null && !existingSelection.unchanged(snap)) {
+            if (!existingSelection.unchanged(snap)) {
                 stopDiagnostic("Liste seit Bestandserfassung verändert; keine neuen Ziele aufgenommen.")
                 return
             }
@@ -296,13 +321,22 @@ class SnapAccessibilityService : AccessibilityService() {
             contentDescription = "Lauf sofort stoppen"
             setOnClickListener { stopDiagnostic() }
         }
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            if (session.mode == SessionMode.INTERACTIVE) addView(Button(this@SnapAccessibilityService).apply {
+                text = "START"
+                contentDescription = "Sichtbaren Bestand erfassen und einen vorhandenen Snap öffnen"
+                setOnClickListener { isEnabled = false; captureExistingForOpening() }
+            })
+            addView(button)
+        }
         val params = WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT).apply { gravity = Gravity.TOP or Gravity.END }
         return try {
-            getSystemService(WindowManager::class.java).addView(button, params)
-            stopButton = button
+            getSystemService(WindowManager::class.java).addView(panel, params)
+            stopButton = panel
             true
         } catch (_: RuntimeException) { false }
     }
