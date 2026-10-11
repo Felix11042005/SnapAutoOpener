@@ -90,12 +90,15 @@ class SnapAccessibilityService : AccessibilityService() {
             existingSelection.initial != null) return
         val snap = actionSnapshot()
         val evidence = snap?.let(ScreenRecognizer::inspect)
+        if (snap != null && evidence != null) record("START_EVIDENCE", RecognitionReport.describe(snap, evidence, false))
         if (snap == null || evidence == null || !existingSelection.capture(snap, evidence)) {
-            stopDiagnostic("START: sichtbarer Bestand nicht eindeutig erkennbar; kein Warten auf spätere Ziele.")
+            if (snap != null) record("ROW_STRUCTURE", RecognitionReport.structure(snap))
+            stopDiagnostic("START: sichtbarer Bestand nicht eindeutig erkennbar (${evidence?.reason ?: "NO_TARGET"}); kein Warten auf spätere Ziele.")
             return
         }
         record("INITIAL_SELECTION", "Bestand beim START im Bedienfeld: ${existingSelection.controls.size} direkte Snap-Klickziele. Keine späteren Ziele aufnehmen.")
         if (existingSelection.controls.isEmpty()) {
+            record("ROW_STRUCTURE", RecognitionReport.structure(snap))
             stopDiagnostic("Bestand ohne direkt anklickbaren Snap-Status; kein Klick ausgeführt.")
             return
         }

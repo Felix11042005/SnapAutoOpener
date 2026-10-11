@@ -1,4 +1,4 @@
-# Öffnungsmodus 5.3.1 – Stand und Pixel-Prüfung
+# Öffnungsmodus 5.3.2 – Stand und Pixel-Prüfung
 
 ## Tatsächlich implementiert
 
@@ -21,7 +21,7 @@ Nächste Schritte: direkten Öffnungsversuch am Pixel bestätigen; eine datenspa
 1. Bestehende APK aktualisieren, Bedienungshilfe aktivieren. Eine Unterhaltung mit bereits ungeöffnetem Snap für den Versuch bereithalten.
 2. „Öffnungsmodus bereitstellen“ drücken und die gewünschte Snapchat-Instanz mit sichtbarer Chatliste öffnen. Im vertraulichen Profil muss dessen Oberfläche tatsächlich zugänglich sein. Bis zum START im schwebenden Feld werden keine Ziele ausgewählt oder angeklickt.
 3. START im Bedienfeld drücken. Der Lauf erfasst genau jetzt den sichtbaren Bestand und klickt höchstens ein direktes Snap-Statusziel. Prüfen, ob tatsächlich der Snap und kein normaler Chat geöffnet wurde. Es wird keine Nachricht versandt.
-4. Der Bericht nennt `INITIAL_SELECTION`, `direkte Snap-Klickziele` und gegebenenfalls `OPEN_RESULT`. `CLICK_ACCEPTED` bedeutet nur, dass Android den Klick angenommen hat. Nicht als geöffnete-Snaps-Zähler auslegen.
+4. Der Bericht nennt `START_EVIDENCE`, `INITIAL_SELECTION`, `direkte Snap-Klickziele` und gegebenenfalls `OPEN_RESULT`. Bei gesperrter Erkennung steht bei direkten Zielen „nicht ausgewertet“; `Statusfelder klickbar` und `Statusfelder mit ACTION_CLICK` sind unabhängig gemessene Rohmerkmale. Ein fehlgeschlagener START enthält zusätzlich `ROW_STRUCTURE` ohne private Texte. `CLICK_ACCEPTED` bedeutet nur, dass Android den Klick angenommen hat. Nicht als geöffnete-Snaps-Zähler auslegen.
 5. STOP vor dem Klick testen; danach darf keine Aktion folgen. Zusätzlich während der Wartephase Liste ändern, Tastatur öffnen oder Bildschirm sperren. Der Lauf muss ohne Ersatzklick abbrechen.
 6. Diagnosemodus separat prüfen: keine Klicks. Bei fehlendem Klickziel Bericht kopieren. Keine privaten Namen oder Snap-Inhalte nötig; zum Test des Öffnens genügt außerdem die Angabe, welche Ansicht erschien.
 

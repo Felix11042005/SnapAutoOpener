@@ -38,7 +38,8 @@ data class Recognition(
 
 data class RecognitionFacts(
     val headers: Int = 0, val filters: Int = 0, val lists: Int = 0,
-    val statusLabels: Int = 0, val myAiLabels: Int = 0, val adLabels: Int = 0
+    val statusLabels: Int = 0, val myAiLabels: Int = 0, val adLabels: Int = 0,
+    val statusClickable: Int = 0, val statusClickActions: Int = 0
 )
 
 /** Positive evidence only. A status label or colored square is never proof of an unopened Snap. */
@@ -48,6 +49,14 @@ object ScreenRecognizer {
     private val myAi = Regex("(?:^|[^\\p{L}])my ai(?:$|[^\\p{L}])")
     private val ad = Regex("(?:^|[^\\p{L}])(?:werbung|anzeige|gesponsert|sponsored|advertisement|ad)(?:$|[^\\p{L}])")
     private fun normalized(value: String) = value.trim().lowercase(Locale.ROOT).replace(Regex("\\s+"), " ")
+
+    /** Allowlisted marker kinds only; never expose the underlying label. */
+    fun markerKind(node: UiNode): String? = when {
+        node.labels.any { myAi.containsMatchIn(normalized(it)) } -> "MY_AI"
+        node.labels.any { ad.containsMatchIn(normalized(it)) } -> "AD"
+        node.labels.any { snapStatus.matches(normalized(it)) } -> "SNAP"
+        else -> null
+    }
 
     fun directSnapControls(snapshot: UiSnapshot, evidence: Recognition = inspect(snapshot)): List<UiNode> {
         if (evidence.screen != ScreenKind.CHAT_LIST || !evidence.rowsEvaluated) return emptyList()
@@ -72,7 +81,8 @@ object ScreenRecognizer {
         val aiNodes = exposed.filter { node -> node.labels.any { myAi.containsMatchIn(normalized(it)) } }
         val adNodes = exposed.filter { node -> node.labels.any { ad.containsMatchIn(normalized(it)) } }
         val exclusions = (aiNodes + adNodes).distinctBy { it.index }
-        val facts = RecognitionFacts(headers.size, filters.size, listNodes.size, statuses.size, aiNodes.size, adNodes.size)
+        val facts = RecognitionFacts(headers.size, filters.size, listNodes.size, statuses.size, aiNodes.size, adNodes.size,
+            statuses.count { it.clickable }, statuses.count { it.canClick })
         fun unknown(reason: String) = Recognition(ScreenKind.UNKNOWN, reason = reason, facts = facts)
         fun blocked(reason: String) = Recognition(ScreenKind.BLOCKED, reason = reason, facts = facts)
         if (!snapshot.bounds.valid) return unknown("INVALID_WINDOW_BOUNDS")
@@ -109,23 +119,36 @@ object ScreenRecognizer {
             filter?.selectionKnown == true -> FilterState.NOT_SELECTED
             else -> FilterState.UNKNOWN
         }
-        // A whole row must be a bounded child of an actual list ancestor. A clickable
-        // nested label is not a row: siblings (e.g. My AI + status) must stay together.
+        val children = snapshot.nodes.filter { it.visible }.groupBy { it.parent }
+        fun transparentContainer(node: UiNode): Boolean {
+            // A large content wrapper may separate rows from the actual list.
+            // Only unwrap structurally separate vertical branches. Overlapping
+            // siblings can be parts of one conversation and must stay together.
+            if (node.list || markerKind(node) != null) return false
+            val parts = children[node.index].orEmpty().sortedBy { it.bounds.top }
+            return parts.isNotEmpty() && parts.all { node.bounds.contains(it.bounds) } &&
+                parts.zipWithNext().all { (a, b) -> a.bounds.bottom <= b.bounds.top }
+        }
+        // The outermost bounded row on a verified ancestry path owns all of its
+        // descendants. A label alone under an oversized wrapper is insufficient.
         fun owningRow(start: UiNode, requireClickable: Boolean): Box? {
             var current: UiNode? = start
             var clickable = false
+            var candidate: Box? = null
             val visited = mutableSetOf<Int>()
             repeat(16) {
                 val node = current ?: return null
                 if (!visited.add(node.index) || !node.visible || !node.bounds.contains(start.bounds)) return null
                 clickable = clickable || node.clickable
                 val parent = node.parent?.let(byIndex::get) ?: return null
-                if (lists.any { it.index == parent.index }) {
-                    return node.bounds.takeIf {
-                        !node.list && it.top >= contentBoundary &&
-                            it.height <= snapshot.bounds.height / 3 && parent.bounds.contains(it) &&
-                            (!requireClickable || clickable)
-                    }
+                if (!parent.bounds.contains(node.bounds)) return null
+                val parentIsList = lists.any { it.index == parent.index }
+                val bounded = !node.list && node.bounds.top >= contentBoundary &&
+                    node.bounds.height <= snapshot.bounds.height / 3
+                if (bounded && (node.index != start.index || parentIsList)) candidate = node.bounds
+                if (!bounded && !transparentContainer(node)) return null
+                if (parentIsList) {
+                    return candidate.takeIf { !requireClickable || clickable }
                 }
                 current = parent
             }

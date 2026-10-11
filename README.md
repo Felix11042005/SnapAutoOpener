@@ -1,6 +1,6 @@
 # SnapAutoOpener
 
-Kotlin Android app, currently **5.3.1-existing-snap** (versionCode 31).
+Kotlin Android app, currently **5.3.2-row-recognition** (versionCode 32).
 
 Two explicit modes are available: diagnostics without interactions, and **Öffnungsmodus bereitstellen**, which adds a floating START/STOP panel. Open the intended Snapchat chat list yourself within 30 seconds, then press START in that panel. It attempts one real native `ACTION_CLICK` on an exact, directly clickable unopened-Snap status. STOP is available in the activity and panel. Notifications never start anything.
 
@@ -24,6 +24,8 @@ An unlocked private profile remains separate. Normal main-profile PackageManager
 Bounded accessibility snapshots feed a pure Kotlin recognizer. Exact visible DE/EN labels, list structure and relative element bounds replace fixed screen strips. The title is resolved before the filter or Snap statuses, ignoring a bottom navigation label. A direct Snap status action does not require the unread filter; diagnostic image analysis and retained scrolling still require its selected state. Missing or incomplete semantics stays unknown. Editable fields block actions and capture. My AI and advertising rows are excluded individually; an exclusion without a clear row blocks actions and capture. Colored connected components are only hints and never authorize clicks.
 
 Reports distinguish recognized statuses, direct click controls, attempted clicks and accepted clicks. They never report accepted clicks as opened Snaps. No contact names or UI text are logged. See [diagnostic findings](docs/DIAGNOSTIC_FINDINGS.md).
+
+5.3.2 supports large intermediate layout containers between list and rows. Unwrapping requires contained, vertically separate child branches (or a single child); overlapping branches and semantic exclusion markers on a large wrapper still block. An entire bounded row owns its descendants, preserving sibling My AI/ad exclusions. Reports separately count raw status clickability and offered ACTION_CLICK capabilities even when screen verification fails. Failed explicit START records a bounded structural trace with allowlisted marker types, ancestor bounds and flags, never UI text. This fixes a demonstrated synthetic failure mode; the reported device tree cannot be reconstructed from the old aggregate counts alone.
 
 On Android 14+, optional analysis uses screenshots of the identified window only. Older systems retain tree diagnostics. Screenshot failures are not bypassed. Pixel analysis runs on a worker; late results are discarded after STOP, navigation, restart or timeout. Images and raw node labels are never persisted. Only bounded diagnostic codes/counts/positions are saved locally; copying is explicit. No credentials, private Snapchat APIs, network permission, root or hooks.
 
