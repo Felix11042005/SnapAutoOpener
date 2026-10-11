@@ -131,33 +131,35 @@ object ScreenRecognizer {
         }
         // The outermost bounded row on a verified ancestry path owns all of its
         // descendants. A label alone under an oversized wrapper is insufficient.
-        fun owningRow(start: UiNode, requireClickable: Boolean): Box? {
+        fun owningRow(start: UiNode, boundary: Int): Box? {
             var current: UiNode? = start
-            var clickable = false
             var candidate: Box? = null
             val visited = mutableSetOf<Int>()
             repeat(16) {
                 val node = current ?: return null
                 if (!visited.add(node.index) || !node.visible || !node.bounds.contains(start.bounds)) return null
-                clickable = clickable || node.clickable
                 val parent = node.parent?.let(byIndex::get) ?: return null
                 if (!parent.bounds.contains(node.bounds)) return null
                 val parentIsList = lists.any { it.index == parent.index }
-                val bounded = !node.list && node.bounds.top >= contentBoundary &&
+                val bounded = !node.list && node.bounds.top >= boundary &&
                     node.bounds.height <= snapshot.bounds.height / 3
                 val isContainer = children[node.index].orEmpty().isNotEmpty()
                 if (bounded && (node.index != start.index || parentIsList || isContainer)) candidate = node.bounds
                 if (!bounded && !transparentContainer(node)) return null
                 if (parentIsList) {
-                    return candidate.takeIf { !requireClickable || clickable }
+                    return candidate
                 }
                 current = parent
             }
             return null
         }
-        val excludedRows = exclusions.map { owningRow(it, requireClickable = false)
+        // Filter chips can themselves be inside the first list item. An exclusion
+        // row may start above the unread chip; it must still be excluded in full.
+        val excludedRows = exclusions.map { owningRow(it, boundary = header.bounds.bottom)
             ?: return blocked("UNSCOPED_AD_OR_MY_AI") }.distinct()
-        val rows = statuses.mapNotNull { owningRow(it, requireClickable = true) }
+        // Structure and interaction capability are independent: the real device
+        // exposes full-row Snap statuses without any native click action.
+        val rows = statuses.mapNotNull { owningRow(it, boundary = contentBoundary) }
             .distinct().filter { row -> excludedRows.none { it.intersects(row) } }.take(30)
         if (filter == null && rows.isEmpty()) return unknown("NO_UNOPENED_LIST_EVIDENCE")
         return Recognition(ScreenKind.CHAT_LIST, filterState, "SEMANTIC_LIST", rows,

@@ -7,7 +7,7 @@ data class ColorCandidate(val bounds: Box, val fill: Double)
 
 /** Connected components inside semantic rows. No fixed screen strips or action coordinates. */
 object VisualEvidence {
-    private fun snapColor(pixel: Int): Boolean {
+    internal fun snapColor(pixel: Int): Boolean {
         val r = pixel shr 16 and 255
         val g = pixel shr 8 and 255
         val b = pixel and 255

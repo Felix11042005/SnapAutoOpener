@@ -1,28 +1,30 @@
-# Öffnungsmodus 5.3.2 – Stand und Pixel-Prüfung
+# Öffnungsmodus 5.4 – Stand und Pixel-Prüfung
 
 ## Tatsächlich implementiert
 
-Der eigene START-Button ruft einen echten Android-`ACTION_CLICK` auf dem erkannten Snap-Status auf. Das ist kein simulierter Erfolg und keine reine Diagnose. Der native Adapter löst denselben Knoten über seinen Pfad im aktuell fokussierten Snapchat-Fenster neu auf, vergleicht dessen Merkmale und prüft anschließend Sitzung, STOP, Timeout und den gesamten aktuellen Baum erneut.
+Der manuelle START über Snapchat friert den sichtbaren Accessibility-Bestand ein. Der Lauf bedient höchstens ein Ziel und ergänzt keine späteren Ziele. Unvollständige, unklare oder leere Bestände beenden ihn sofort. Änderungen am gesamten Baum oder Fenster vor der Aktion brechen ab. Vorbereitung und Öffnungsversuch haben jeweils 30 Sekunden Zeitlimit.
 
-„Öffnungsmodus bereitstellen“ zeigt zunächst ein schwebendes START/STOP-Bedienfeld. Erst wenn du über der gewünschten Snapchat-Chatliste START drückst, wird deren aktueller Bestand eingefroren. Weitere Ziele werden während des Laufs nicht ergänzt. Eine veränderte Liste beendet den Versuch. Ein leeres, unvollständiges oder unklares Ergebnis beendet ihn sofort und wartet nicht auf neu eintreffende Snaps. Vorbereitung und Öffnungsversuch haben jeweils 30 Sekunden Zeitlimit.
+Ist der genaue „Neuer Snap“-Status selbst anklickbar und bietet ACTION_CLICK an, wird dieser Knoten über seinen Pfad frisch aufgelöst und einmal nativ angeklickt. Ein anklickbarer Vorfahr der Unterhaltung ist kein Ersatz.
 
-Es wird höchstens ein direkt anklickbarer Status bedient. My AI und Werbung sind ausgeschlossen; unklare Zuordnung, Tastatur, Eingabefeld, unvollständiger Baum oder fehlendes Klickziel verhindern die Bedienung. Ein Klick auf die ganze Unterhaltung oder eine geschätzte Bildschirmposition ist kein Ersatz.
+Fehlt diese native Klickfähigkeit, kann 5.4 auf Android 14+ tatsächlich einmal tippen: Zwei Screenshots ausschließlich des identifizierten Snapchat-Fensters müssen ein einzelnes gefülltes rotes/violettes Quadrat innerhalb einer eindeutig zugeordneten ungeöffneten Snap-Zeile zeigen. Die Bilder müssen 300–2500 ms auseinanderliegen, mit gleichen Symbolgrenzen und identischen Pixeln in der ausgewählten Zeile. Der vollständige Baum muss unverändert bleiben. Erst dann wird die frisch erkannte Symbolmitte verwendet; es gibt keine festen Bildschirmkoordinaten oder einen Tipp auf die Mitte der Unterhaltung. STOP, Sitzungskennung, Timeout, aktuelle Fensterdaten und das Budget von einem Versuch werden unmittelbar vor dem dispatchGesture erneut geprüft.
 
-## Noch nicht fertig: gesamter vorhandener Bestand
+My AI und Werbung werden einschließlich ihrer gesamten Zeile ausgeschlossen, auch wenn sie in der ersten Filterzeile stehen. Tastatur, Eingabefeld, unvollständiger Baum, verändertes/fehlendes Bild oder mehrere passende Symbole in derselben Zeile verhindern den Tipp. Nach abgelehntem Tipp oder Ausnahme gibt es keinen Ersatzversuch. STOP verwirft ausstehende Ergebnisse; ein bereits an Android übergebener 80-ms-Tipp kann noch fertiglaufen. Der Diagnosemodus bleibt ohne Bedienaktionen.
 
-Das Ziel bleibt, die bei Sitzungsbeginn bereits vorhandenen ungeöffneten Snaps abzuarbeiten und später eintreffende auszuschließen. Version 5.3 liefert dafür den ersten echten Öffnungsversuch, noch keine Stapelverarbeitung. Der bisherige Gerätebericht enthält Listenelemente, aber keinen Nachweis für Klickfähigkeit oder die Struktur der Snap-Ansicht. Ein zuverlässiger automatischer Wechsel zum nächsten Snap und zurück ist damit nicht belegt.
+Farbe und Form sind keine eindeutige Identität. Eine gleich geformte Dekoration in einer semantisch passenden Zeile kann weiterhin falsch erkannt werden. Die Formgrenzen sind noch nicht anhand echter Pixel-Bilder kalibriert. Die Kombination der Prüfungen ist synthetisch getestet; das tatsächliche Snapchat-Verhalten muss am Gerät bestätigt werden.
 
-Ein eingefrorener Accessibility-Baum ist zudem keine serverseitige Liste einzelner Snap-IDs. Neue Inhalte derselben Unterhaltung können ohne ausreichend unterscheidbare Informationen auftreten. Ohne solche Merkmale darf keine strikte Alt/Neu-Trennung einzelner Snaps behauptet werden. Die Anwendung überwacht keine eingehenden Nachrichten im Hintergrund.
+## Noch offen: gesamter vorhandener Bestand
 
-Nächste Schritte: direkten Öffnungsversuch am Pixel bestätigen; eine datensparsame Beschreibung der Snap-Ansicht erfassen; eindeutige Viewer-Erkennung und bestätigte Rückkehr implementieren; vorhandene Einträge über stabile Identitäten zuordnen; endlich begrenzte Warteschlange testen. Bis diese Voraussetzungen erfüllt sind, bleiben automatische Weiter-/Zurück-Aktionen gesperrt.
+Das Ziel bleibt, bereits vorhandene ungeöffnete Snaps zu bearbeiten. Diese Version liefert einen echten Öffnungsversuch; eine automatische Schleife mit Weiter/Zurück und Scrollen ist noch nicht freigegeben. Eine zuverlässige Viewer-Erkennung und Rückkehr sowie stabile Identitäten einzelner Snaps fehlen.
+
+Ein eingefrorener Accessibility-Baum ist keine serverseitige Liste einzelner Snap-IDs. Neue Inhalte derselben Unterhaltung können ohne unterscheidbare Informationen erscheinen. Deshalb ist keine strikte Alt/Neu-Trennung einzelner Snaps zugesichert. Snapchat beschreibt außerdem, dass [mehrere empfangene Snaps automatisch in Reihenfolge abgespielt werden](https://help.snapchat.com/hc/en-us/articles/7012316500372-How-do-I-view-Snaps). Ein Tipp garantiert daher nicht, dass nur ein Snap sichtbar wird. Die App überwacht keine eingehenden Nachrichten im Hintergrund.
 
 ## Pixel 8 testen
 
-1. Bestehende APK aktualisieren, Bedienungshilfe aktivieren. Eine Unterhaltung mit bereits ungeöffnetem Snap für den Versuch bereithalten.
-2. „Öffnungsmodus bereitstellen“ drücken und die gewünschte Snapchat-Instanz mit sichtbarer Chatliste öffnen. Im vertraulichen Profil muss dessen Oberfläche tatsächlich zugänglich sein. Bis zum START im schwebenden Feld werden keine Ziele ausgewählt oder angeklickt.
-3. START im Bedienfeld drücken. Der Lauf erfasst genau jetzt den sichtbaren Bestand und klickt höchstens ein direktes Snap-Statusziel. Prüfen, ob tatsächlich der Snap und kein normaler Chat geöffnet wurde. Es wird keine Nachricht versandt.
-4. Der Bericht nennt `START_EVIDENCE`, `INITIAL_SELECTION`, `direkte Snap-Klickziele` und gegebenenfalls `OPEN_RESULT`. Bei gesperrter Erkennung steht bei direkten Zielen „nicht ausgewertet“; `Statusfelder klickbar` und `Statusfelder mit ACTION_CLICK` sind unabhängig gemessene Rohmerkmale. Ein fehlgeschlagener START enthält zusätzlich `ROW_STRUCTURE` ohne private Texte. `CLICK_ACCEPTED` bedeutet nur, dass Android den Klick angenommen hat. Nicht als geöffnete-Snaps-Zähler auslegen.
-5. STOP vor dem Klick testen; danach darf keine Aktion folgen. Zusätzlich während der Wartephase Liste ändern, Tastatur öffnen oder Bildschirm sperren. Der Lauf muss ohne Ersatzklick abbrechen.
-6. Diagnosemodus separat prüfen: keine Klicks. Bei fehlendem Klickziel Bericht kopieren. Keine privaten Namen oder Snap-Inhalte nötig; zum Test des Öffnens genügt außerdem die Angabe, welche Ansicht erschien.
+1. APK aktualisieren und Bedienungshilfe aktivieren. Bereits ungeöffneten Snap bereithalten.
+2. „Öffnungsmodus bereitstellen“ drücken, gewünschte Snapchat-Instanz manuell öffnen und Chatliste anzeigen. Im vertraulichen Profil muss die Oberfläche tatsächlich zugänglich sein.
+3. START im schwebenden Bedienfeld drücken und die Liste ruhig halten. Nach ungefähr zwei Bildprüfungen kann einmal das gefüllte Snap-Symbol angetippt werden. Prüfen, welche Ansicht erscheint: gewünschter Snap, normaler Chat oder keine Reaktion. Es wird keine Nachricht verschickt.
+4. Der Bericht enthält START_EVIDENCE, INITIAL_SELECTION, VISUAL_HINT, VISUAL_CONFIRMATION und OPEN_RESULT. SECOND_IMAGE_REQUIRED zeigt die erste Bildprüfung, TWO_IMAGES_CONFIRMED die Übereinstimmung. TAP_DISPATCH_ACCEPTED bedeutet nur Android-Annahme, TAP_COMPLETION nur Gestenabschluss; beide beweisen keine Snap-Öffnung. Beim nativen Weg bleibt CLICK_ACCEPTED erhalten.
+5. STOP während der Bildprüfung testen; außerdem Liste ändern, Tastatur öffnen und Bildschirm sperren. Es darf kein neuer Tipp aus ausstehenden Ergebnissen folgen. Diagnose separat testen: keine Aktionen.
+6. Bei fehlender Reaktion Bericht kopieren. Keine Namen oder Snap-Inhalte nötig; zusätzlich genügt die Angabe, welche Ansicht nach dem Versuch erschien.
 
-Native Knotenauflösung, tatsächliches Klickverhalten, Private Space und Snap-Viewer lassen sich durch die synthetischen Unit-Tests allein nicht bestätigen.
+Native Fensteraufnahme, Gestenverhalten, Private Space und Snap-Viewer lassen sich durch Unit-Tests allein nicht bestätigen.

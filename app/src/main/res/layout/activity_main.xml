@@ -6,7 +6,7 @@
         <TextView android:id="@+id/title" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:textSize="24sp" android:textStyle="bold" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="12dp" android:text="Einen vorhandenen Snap öffnen: Öffnungsmodus bereitstellen, Snapchat-Chatliste anzeigen und dort START im schwebenden Bedienfeld drücken. Dabei wird der sichtbare Bestand erfasst und höchstens ein direktes Snap-Statusziel angeklickt. Spätere Ziele werden nicht ergänzt. Mehrere Snaps automatisch abzuarbeiten ist noch nicht verfügbar."
+            android:layout_marginTop="12dp" android:text="Vorhandenen Snap öffnen: Öffnungsmodus bereitstellen, Snapchat-Chatliste anzeigen und dort START im Bedienfeld drücken. Bei einem erkannten ungeöffneten Snap wird dessen direktes Statusziel angeklickt oder nach zwei gleichen Bildern einmal auf sein gefülltes rotes/violettes Symbol getippt. Spätere Ziele werden nicht ergänzt. Das Verhalten muss am Gerät geprüft werden. Snapchat kann mehrere Snaps derselben Unterhaltung automatisch abspielen."
             android:textSize="16sp" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="12dp" android:text="Snap untersagt nicht autorisierte automatisierte Drittanbieter-Interaktionen. Auch diese Diagnose ist nicht ausdrücklich freigegeben. Live-Nutzung bitte mit Snap klären. Offline-Tests greifen nicht auf Snapchat zu." />

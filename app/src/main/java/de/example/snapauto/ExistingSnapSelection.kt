@@ -7,8 +7,10 @@ class ExistingSnapSelection {
         private set
     var controls: List<UiNode> = emptyList()
         private set
+    var rows: List<Box> = emptyList()
+        private set
 
-    fun reset() { sealed = false; initial = null; controls = emptyList() }
+    fun reset() { sealed = false; initial = null; controls = emptyList(); rows = emptyList() }
 
     fun capture(snapshot: UiSnapshot, evidence: Recognition): Boolean {
         if (sealed) return false
@@ -16,6 +18,7 @@ class ExistingSnapSelection {
         if (evidence.screen != ScreenKind.CHAT_LIST) return false
         initial = snapshot
         controls = ScreenRecognizer.directSnapControls(snapshot, evidence)
+        rows = evidence.rows
         return true
     }
 

@@ -22,6 +22,34 @@ class AndroidActionExecutor(
 
     fun openSnapOnce(token: Long, request: ActionRequest): OpenResult = opener.open(token, request)
 
+    fun openVisualOnce(token: Long, request: ActionRequest, completed: (Boolean) -> Unit): OpenResult {
+        if (inFlight) return OpenResult(false, false, "ACTION_IN_FLIGHT")
+        return VisualSnapOpener(session, SystemClock::elapsedRealtime, currentSnapshot,
+            SnapTapPort { icon, authorize ->
+                val path = Path().apply { moveTo((icon.left + icon.right) / 2f, (icon.top + icon.bottom) / 2f) }
+                val gesture = GestureDescription.Builder()
+                    .addStroke(GestureDescription.StrokeDescription(path, 0, 80)).build()
+                if (!authorize()) false else {
+                    inFlight = true
+                    val accepted = try { service.dispatchGesture(gesture, object : AccessibilityService.GestureResultCallback() {
+                        override fun onCompleted(gestureDescription: GestureDescription?) {
+                            inFlight = false
+                            if (session.accepts(token, SystemClock.elapsedRealtime())) completed(true)
+                        }
+                        override fun onCancelled(gestureDescription: GestureDescription?) {
+                            inFlight = false
+                            if (session.accepts(token, SystemClock.elapsedRealtime())) completed(false)
+                        }
+                    }, handler) } catch (failure: RuntimeException) {
+                        inFlight = false
+                        throw failure
+                    }
+                    if (!accepted) inFlight = false
+                    accepted
+                }
+            }).open(token, request)
+    }
+
     @Suppress("DEPRECATION")
     private fun clickExactControl(expected: UiSnapshot, control: UiNode, authorize: () -> Boolean): Boolean? {
         val windows = service.windows

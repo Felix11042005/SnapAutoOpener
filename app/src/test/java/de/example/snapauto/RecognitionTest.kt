@@ -166,9 +166,10 @@ class RecognitionTest {
         assertEquals(ScreenKind.UNKNOWN, recognize(s.copy(nodes = s.nodes +
             UiNode(7, 0, listOf("Unread"), Box(300, 150, 500, 210)))).screen)
     }
-    @Test fun statusMustBeInBoundedClickableListRow() {
-        val s = chatFixture()
-        assertTrue(recognize(s.copy(nodes = s.nodes.map { it.copy(clickable = false) })).rows.isEmpty())
+    @Test fun rowRecognitionDoesNotInventNativeClickCapability() {
+        val s = chatFixture().let { it.copy(nodes = it.nodes.map { n -> n.copy(clickable = false) }) }
+        assertEquals(1, recognize(s).rows.size)
+        assertTrue(ScreenRecognizer.directSnapControls(s).isEmpty())
     }
     @Test fun labelInMessageDoesNotBecomeSnapStatus() {
         val s = chatFixture()
