@@ -8,8 +8,8 @@ android {
         applicationId = "de.example.snapauto"
         minSdk = 26
         targetSdk = 35
-        versionCode = 24
-        versionName = "4.8-manual-unread"
+        versionCode = 25
+        versionName = "4.9-diagnostic-only"
     }
 
     val keystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
