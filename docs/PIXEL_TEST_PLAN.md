@@ -1,13 +1,13 @@
-# Pixel-8-Abnahme: 5.4-visual-single-snap
+# Pixel-8-Abnahme: 5.5-reference-symbols
 
-Diese Tests wurden nicht auf einem echten Pixel durchgeführt. Unit-Tests verwenden ausschließlich synthetische Daten. Sie belegen weder Snapchat-Erkennungsqualität noch Private-Space-Kompatibilität oder Vertragskonformität. Live-Nutzung mit Snap klären (siehe Bestandsaufnahme).
+Diese Tests wurden nicht auf einem echten Pixel durchgeführt. Unit-Tests verwenden synthetische Daten und isolierte Symbolausschnitte aus den bereitgestellten Aufnahmen. Sie belegen weder die Erkennungsqualität ganzer Fenster noch Private-Space-Kompatibilität oder Vertragskonformität. Live-Nutzung mit Snap klären (siehe Bestandsaufnahme).
 
 Der echte Öffnungsversuch und seine zusätzlichen Bildprüfungen sind in [OPENING_MODE.md](OPENING_MODE.md) beschrieben. Die folgenden Erkennungsprüfungen beziehen sich auf den separat wählbaren Diagnosemodus; dieser muss ohne Bedienaktionen bleiben.
 
 ## Installation und Profil
 
 1. Neueste erfolgreiche **Build APK**-Ausführung für main öffnen, Commit prüfen, unter **Artifacts → SnapAutoOpener-apk** die ZIP laden und `SnapAutoOpener.apk` entpacken. PR-Artifacts sind Debug-Validierungsbuilds, main verwendet wie bisher vorhandene Signiersecrets. Nicht zum Umgehen eines Signaturfehlers blind deinstallieren; den passenden signierten main-Build verwenden.
-2. Android-Version, Snapchat-Version, Sprache, Theme, Schrift-/Displaygröße und Installationsprofil notieren. APK zeigt 5.4-visual-single-snap (33).
+2. Android-Version, Snapchat-Version, Sprache, Theme, Schrift-/Displaygröße und Installationsprofil notieren. APK zeigt 5.5-reference-symbols (34).
 3. Bedienungshilfe in den Android-Einstellungen aktivieren, soweit Android dies für diese Installation zulässt. Kein Benachrichtigungszugriff nötig. Wenn Android eine Aktivierung verhindert: Ergebnis notieren; keine Profil-/Sicherheitsumgehung.
 4. Hauptprofil und entsperrtes Private Space getrennt prüfen. Eine Paket-Sichtbarkeitsmeldung beweist nicht, welche Profilkopie beobachtet wird. Im Private Space installierte Dienstkopie kann andere Möglichkeiten haben; nicht als bereits unterstützt voraussetzen.
 

@@ -1,0 +1,7 @@
+# UI glyph regression fixtures
+
+Isolated status symbols supplied in a PNG and a 16.5-second video on 2026-10-11. No names, conversation text, avatars, Snap contents or full frames are included. The notification-dot fixture contains only its color shape. Crops are quantized to 16 RGB colors for a small auditable text representation: width, height, assumed display density and expected state; palette; one hexadecimal palette index per pixel. Density values are test assumptions, not device metadata measured from the video.
+
+The filled rounded-square profile in SnapIconShape comes from the first video symbol. Other video symbols and the scaled sample verify that profile; the standalone PNG supplies negative outline/Chat/arrow samples. The video contains no demonstrated filled purple square; purple-filled coverage is synthetic and explicitly named as such. The scaled sample uses nearest-neighbor resizing matching the app's unfiltered downscaling approach; it is not a native screenshot captured by the service.
+
+The full PNG is a list without visible filled red/purple status squares. The video shows an older V4.8 interface, then a list with filled red squares and a highlighted unread chip, then an image viewer and a reply keyboard. These frames do not establish who caused the transitions, the currently installed app version, Accessibility labels, or support for a batch loop. Reference tests validate glyph decisions, not Android gesture integration.
