@@ -28,7 +28,12 @@ class RecognitionTest {
     }
     @Test fun unselectedFilterIsNeverAssumedSelected() {
         val s = chatFixture(); val r = recognize(s.copy(nodes = s.nodes.map { it.copy(selected = false) }))
-        assertEquals(FilterState.NOT_SELECTED, r.filter)
+        assertEquals(FilterState.UNKNOWN, r.filter)
+    }
+    @Test fun explicitUncheckedFilterCanBeReportedAsNotSelected() {
+        val s = chatFixture()
+        val nodes = s.nodes.map { if (it.index == 2) it.copy(selected = false, selectionKnown = true) else it }
+        assertEquals(FilterState.NOT_SELECTED, recognize(s.copy(nodes = nodes)).filter)
     }
     @Test fun englishLabelsSupported() {
         val s = chatFixture().let { it.copy(nodes = it.nodes.map { n -> n.copy(labels = when(n.index) {

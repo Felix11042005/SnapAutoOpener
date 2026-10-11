@@ -26,7 +26,7 @@ Diese Tests wurden nicht auf einem echten Pixel durchgeführt. Unit-Tests verwen
 ## Erkennung
 
 - Chatliste mit semantisch sichtbarem Header, Filter und Listenstruktur: `CHAT_LIST`; zwei identische Beobachtungen nötig. Fehlende/mehrdeutige Merkmale: `UNKNOWN`, keine geschätzten Ersatzkoordinaten.
-- Ungelesen aus/an vergleichen: `NOT_SELECTED` bzw. `SELECTED` nur bei tatsächlich gemeldetem Node-Zustand. Liefert Snapchat keine Auswahlsemantik, gibt es keine Bilddiagnose. Bitte genau diesen Fall melden.
+- Ungelesen aus/an vergleichen: `SELECTED` nur bei positiv gemeldeter Auswahl; `NOT_SELECTED` nur bei explizit prüfbarem, nicht aktiviertem Steuerelement. Sonst `UNKNOWN`. Liefert Snapchat keine Auswahlsemantik, gibt es keine Bilddiagnose. Bitte genau diesen Fall melden.
 - Normalen Chat, Suche, Snap-Ansicht und Tastatur manuell öffnen: editierbare Felder sperren; fehlende Listenevidenz bleibt unbekannt. Es gibt keine automatische Rücknavigation.
 - Sichtbare Werbung oder My AI: konservative Sperre der ganzen Aufnahme. Auch harmlose Inhalte können diese Sperre auslösen. Keine Bedienung dieser Elemente.
 - Helles/dunkles Theme, große Schrift, Drehung, Displayzoom, Split-Screen testen. Geänderte Geometrie setzt Stabilität zurück. Abweichende Bild-/Fenstergröße: `GEOMETRY_MISMATCH`, keine Positionszuordnung.

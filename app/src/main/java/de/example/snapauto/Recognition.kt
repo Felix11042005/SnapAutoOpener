@@ -14,7 +14,8 @@ data class UiNode(
     val index: Int, val parent: Int?, val labels: List<String>, val bounds: Box,
     val visible: Boolean = true, val enabled: Boolean = true,
     val selected: Boolean = false, val editable: Boolean = false,
-    val clickable: Boolean = false, val list: Boolean = false
+    val clickable: Boolean = false, val list: Boolean = false,
+    val selectionKnown: Boolean = false
 )
 
 data class UiSnapshot(
@@ -58,7 +59,11 @@ object ScreenRecognizer {
         if (header.bounds.bottom > filter.bounds.top) return unknown("HEADER_FILTER_ORDER")
         val lists = visible.filter { it.list && it.bounds.bottom > filter.bounds.bottom }
         if (lists.isEmpty()) return unknown("NO_LIST_STRUCTURE")
-        val filterState = if (filter.selected) FilterState.SELECTED else FilterState.NOT_SELECTED
+        val filterState = when {
+            filter.selected -> FilterState.SELECTED
+            filter.selectionKnown -> FilterState.NOT_SELECTED
+            else -> FilterState.UNKNOWN
+        }
         val byIndex = snapshot.nodes.associateBy { it.index }
         val rows = visible.filter { node -> node.labels.any { snapStatus.matches(normalized(it)) } }
             .mapNotNull { status ->

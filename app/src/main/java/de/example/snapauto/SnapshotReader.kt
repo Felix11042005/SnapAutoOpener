@@ -28,11 +28,13 @@ object SnapshotReader {
                         node.isEditable || node.className?.toString()?.endsWith("EditText") == true,
                         node.isClickable, node.collectionInfo != null ||
                             (node.isScrollable && (node.className?.contains("RecyclerView") == true ||
-                                node.className?.contains("ListView") == true)))
+                                node.className?.contains("ListView") == true)),
+                        selectionKnown = node.isCheckable)
                     val remaining = (LIMIT - nodes.size - queue.size).coerceAtLeast(0)
                     if (node.childCount > remaining) truncated = true
                     for (i in 0 until minOf(node.childCount, remaining)) {
-                        node.getChild(i)?.let { queue.add(it to index) }
+                        val child = node.getChild(i)
+                        if (child != null) queue.add(child to index) else truncated = true
                     }
                 } finally { node.recycle() }
             }

@@ -133,7 +133,7 @@ class SnapAccessibilityService : AccessibilityService() {
             val rect = Rect()
             app.getBoundsInScreen(rect)
             return SnapshotReader.read(root, rect)
-        } catch (_: IllegalStateException) {
+        } catch (_: RuntimeException) {
             return null
         } finally { visibleWindows.forEach { it.recycle() } }
     }
