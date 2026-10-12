@@ -105,6 +105,8 @@ class FullInventory(val owner: UiSnapshot) {
     private val scanPages = mutableSetOf<String>()
     var lastMotion = "NO_PENDING_SCROLL"
         private set
+    var lastMotionEvidence: ScrollMotionEvidence? = null
+        private set
 
     fun sameWindow(snapshot: UiSnapshot) = snapshot.packageName == ScreenRecognizer.TARGET_PACKAGE &&
         snapshot.windowId == owner.windowId && snapshot.bounds == owner.bounds
@@ -126,11 +128,13 @@ class FullInventory(val owner: UiSnapshot) {
             return stop("INVENTORY_SURFACE_INVALID")
         val surface = ChatListSurface.find(snapshot, evidence) ?: return stop("INVENTORY_LIST_AMBIGUOUS")
         val fingerprint = fingerprint(snapshot, surface.region)
+        lastMotionEvidence = null
         previousScrollPage?.let { previous ->
             val before = previousScrollSnapshot
             val direction = previousDirection
             val motion = if (before != null && direction != null && contentHash != null && previousScrollHash != null)
-                ScrollMotion.assess(before, snapshot, direction, previous == fingerprint && previousScrollHash == contentHash)
+                ScrollMotion.inspect(before, snapshot, direction, previous == fingerprint && previousScrollHash == contentHash)
+                    .also { lastMotionEvidence = it }.kind
             else if (previous == fingerprint) ScrollMotionKind.UNCHANGED else ScrollMotionKind.EXPECTED
             lastMotion = motion.name
             if (motion == ScrollMotionKind.REVERSED) return stop("SCROLL_DIRECTION_REVERSED")

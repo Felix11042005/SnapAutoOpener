@@ -1,5 +1,9 @@
 # Validierung
 
+## 5.8.1-overlap-scroll (versionCode 38)
+
+Ausgangspunkt: `39a5069`. Gezielt wird der im Gerätebericht tatsächlich verwendete unbeschränkte native Listenscroll durch die vorhandene begrenzte Geste ersetzt. Der Filterklick bleibt nativ möglich. Zusätzliche Berichte unterscheiden fehlende/verschiedene/widersprüchlich bewegte Anker. Die Fehlerursache innerhalb der alten Sammelkategorie `UNVERIFIED` ist durch den bisherigen Bericht nicht eindeutig belegt. Neue synthetische Tests bilden den Verlust der Seitenüberlappung und einen überlappenden Seitenwechsel mit verschwindendem Filter nach. Gemeinsame Kontakte werden jetzt vorrangig über die bestehende kanonische Kontaktidentität ihrer Zeile verglichen; mehrfach gemeldete Labels innerhalb einer Zeile werden zusammengefasst. Ein Regressionstest prüft wechselnde Duplikatknoten bei überlappenden Kontakten. Die Bewegungsprüfung bleibt aktiv. [Evidenz und Gerätetest](SCROLL_OVERLAP.md). CI-Ergebnisse und Testzahl des ausgelieferten Commits sind maßgeblich; keine Pixel-Abnahme behauptet.
+
 ## 5.8-direction-check (versionCode 37)
 
 Ausgangspunkt: `ff8ab95` (5.7). Lokal wurden alle Android-unabhängigen Produktklassen und sämtliche JUnit-Tests mit Java 17 / Kotlin 2.1.0 kompiliert: **204 Tests erfolgreich**. Der neue gemeldete-Schleifen-Test erreicht mit acht visuellen Zielen, ohne native Klickziele und trotz 1–2 Pixel Zittern den Tippadapter. Weitere Regressionen prüfen Listen-/Fingerrichtung, gegenläufige und nicht belegbare Bewegung sowie weiterhin strenge Bildprüfung vor einer Öffnung. [Fehleranalyse und gelesene Vergleichsprojekte](SCROLL_FIX.md).
