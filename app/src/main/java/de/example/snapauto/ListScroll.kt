@@ -17,12 +17,25 @@ object ListScroll {
 
 enum class ScrollMotionKind { EXPECTED, REVERSED, UNCHANGED, UNVERIFIED }
 
+/** Counts only: never persist the labels or hashes used for correspondence. */
+data class ScrollMotionEvidence(val kind: ScrollMotionKind, val reason: String,
+    val beforeAnchors: Int = 0, val afterAnchors: Int = 0, val commonAnchors: Int = 0,
+    val upward: Int = 0, val downward: Int = 0, val stationary: Int = 0,
+    val source: String = "NODE_LABEL", val commonRows: Int = 0) {
+    fun summary() = "Grund=$reason; Quelle=$source; gemeinsame Kontaktzeilen=$commonRows; Anker vorher=$beforeAnchors; nachher=$afterAnchors; gemeinsam=$commonAnchors; " +
+        "Inhalt aufwärts=$upward; abwärts=$downward; unverändert=$stationary"
+}
+
 /** Compare unique text anchors inside the list. Raw labels never leave this method. */
 object ScrollMotion {
     fun assess(before: UiSnapshot, after: UiSnapshot, direction: ListNavigationKind,
-        identicalFallback: Boolean = false): ScrollMotionKind {
+        identicalFallback: Boolean = false): ScrollMotionKind = inspect(before, after, direction, identicalFallback).kind
+
+    fun inspect(before: UiSnapshot, after: UiSnapshot, direction: ListNavigationKind,
+        identicalFallback: Boolean = false): ScrollMotionEvidence {
         if (direction == ListNavigationKind.FILTER || before.windowId != after.windowId ||
-            before.bounds != after.bounds || before.packageName != after.packageName) return ScrollMotionKind.UNVERIFIED
+            before.bounds != after.bounds || before.packageName != after.packageName)
+            return ScrollMotionEvidence(ScrollMotionKind.UNVERIFIED, "SURFACE_OR_DIRECTION_INVALID")
         fun anchors(snapshot: UiSnapshot): Map<String, Int> {
             val evidence = ScreenRecognizer.inspectFiltered(snapshot)
             val region = ChatListSurface.find(snapshot, evidence)?.region ?: return emptyMap()
@@ -41,14 +54,29 @@ object ScrollMotion {
             }.groupBy { it.first }
             return values.filterValues { it.size == 1 }.mapValues { it.value.single().second }
         }
-        val old = anchors(before); val current = anchors(after)
+        // Match contacts by their owning row, using the same canonical identity as
+        // inventory capture. Duplicate labels within one row are not two contacts.
+        // Identical identities in different rows remain ambiguous and are excluded.
+        fun rowAnchors(snapshot: UiSnapshot): Map<String, Int> = ScreenRecognizer.inspectFiltered(snapshot).rows
+            .mapNotNull { row -> InventoryIdentityReader.read(snapshot, row)?.let { it.contact to (row.top + row.bottom) / 2 } }
+            .groupBy { it.first }.filterValues { it.size == 1 }.mapValues { it.value.single().second }
+        val oldRows = rowAnchors(before); val currentRows = rowAnchors(after)
+        val commonRows = oldRows.keys.intersect(currentRows.keys).size
+        val useRows = commonRows > 0
+        val old = if (useRows) oldRows else anchors(before)
+        val current = if (useRows) currentRows else anchors(after)
         val shifts = old.mapNotNull { (key, y) -> current[key]?.let { it - y } }
-        if (shifts.isEmpty()) return if (identicalFallback) ScrollMotionKind.UNCHANGED else ScrollMotionKind.UNVERIFIED
         val threshold = maxOf(4, before.bounds.height / 200)
         val moved = shifts.filter { kotlin.math.abs(it) >= threshold }
-        if (moved.isEmpty()) return ScrollMotionKind.UNCHANGED
-        if (moved.any { it < 0 } && moved.any { it > 0 }) return ScrollMotionKind.UNVERIFIED
+        fun result(kind: ScrollMotionKind, reason: String) = ScrollMotionEvidence(kind, reason,
+            old.size, current.size, shifts.size, moved.count { it < 0 }, moved.count { it > 0 }, shifts.size - moved.size,
+            if (useRows) "CONTACT_ROW" else "NODE_LABEL", commonRows)
+        if (shifts.isEmpty()) return if (identicalFallback) result(ScrollMotionKind.UNCHANGED, "IDENTICAL_PAGE")
+            else result(ScrollMotionKind.UNVERIFIED, if (old.isEmpty() || current.isEmpty()) "ANCHORS_MISSING" else "NO_COMMON_ANCHORS")
+        if (moved.isEmpty()) return result(ScrollMotionKind.UNCHANGED, "ANCHORS_STATIONARY")
+        if (moved.any { it < 0 } && moved.any { it > 0 }) return result(ScrollMotionKind.UNVERIFIED, "CONFLICTING_MOVEMENT")
         val expectedNegative = direction == ListNavigationKind.DOWN
-        return if ((moved.first() < 0) == expectedNegative) ScrollMotionKind.EXPECTED else ScrollMotionKind.REVERSED
+        return if ((moved.first() < 0) == expectedNegative) result(ScrollMotionKind.EXPECTED, "DIRECTION_CONFIRMED")
+            else result(ScrollMotionKind.REVERSED, "DIRECTION_REVERSED")
     }
 }

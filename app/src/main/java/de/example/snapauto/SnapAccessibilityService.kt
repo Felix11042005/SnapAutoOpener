@@ -439,6 +439,7 @@ class SnapAccessibilityService : AccessibilityService() {
         val nativeRows = native.mapNotNull { control -> evidence.rows.singleOrNull { it.contains(control.bounds) } }
         val decision = run.page(snap, evidence, page.verifiedRows + nativeRows, contentHash)
         record("INVENTORY_PAGE", "Phase=${run.phase}; Seiten=${run.pages}; Statuszeilen=${evidence.rows.size}; visuell bestätigt=${page.verifiedRows.size}; native Ziele=${nativeRows.size}; ursprüngliche Ziele=${run.roster.size}; verbleibend=${run.roster.remaining}; Bewegung=${run.lastMotion}; Entscheidung=${decision.reason}")
+        run.lastMotionEvidence?.let { record("SCROLL_EVIDENCE", it.summary()) }
         status = when (run.phase) {
             InventoryPhase.FILTER -> "Ungelesen aktivieren."
             InventoryPhase.SCAN -> "Erfasse ab START nach unten: ${run.pages} Seiten, ${run.roster.size} Ziele. Noch keine Öffnung."
@@ -478,7 +479,7 @@ class SnapAccessibilityService : AccessibilityService() {
         }
         if (result.attempted) navigationAttempts++
         record("LIST_NAVIGATION", "Art=$kind; ${result.reason}; versucht=${result.attempted}; angenommen=${result.accepted}")
-        if (!result.accepted && result.reason != "NATIVE_SCROLL_BOUNDARY_OR_REJECTION") {
+        if (!result.accepted) {
             stopDiagnostic("Filter-/Scrollaktion beendet: ${result.reason}"); return
         }
         handler.postDelayed({

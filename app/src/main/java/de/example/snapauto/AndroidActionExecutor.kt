@@ -43,17 +43,16 @@ class AndroidActionExecutor(
     fun navigateList(token: Long, request: ListNavigationRequest, inventory: FullInventory,
         completed: (Boolean) -> Unit): OpenResult {
         if (inFlight) return OpenResult(false, false, "ACTION_IN_FLIGHT")
-        var nativeScroll = false
         val result = ListNavigationOnce(session, SystemClock::elapsedRealtime, currentSnapshot, inventory,
             ListNavigationPort { operation, target, region, authorize ->
                 val nativeAction = when (operation.kind) {
                     ListNavigationKind.FILTER -> if (target.canClick) AccessibilityNodeInfo.ACTION_CLICK else null
-                    ListNavigationKind.UP -> if (target.canScrollBackward) AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD else null
-                    ListNavigationKind.DOWN -> if (target.canScrollForward) AccessibilityNodeInfo.ACTION_SCROLL_FORWARD else null
+                    // Native scrolling can replace a whole page and destroy the overlap
+                    // required by ScrollMotion. Always use the bounded gesture for lists.
+                    ListNavigationKind.UP, ListNavigationKind.DOWN -> null
                 }
                 if (nativeAction != null && target.path.isNotEmpty()) {
                     report("LIST_ROUTE kind=${operation.kind}; native=$nativeAction")
-                    nativeScroll = operation.kind != ListNavigationKind.FILTER
                     val accepted = performExactNode(operation.page.snapshot, target, nativeAction, authorize) == true
                     handler.postDelayed({ if (session.accepts(token, SystemClock.elapsedRealtime())) completed(true) }, 400)
                     accepted
@@ -92,8 +91,7 @@ class AndroidActionExecutor(
                     }
                 }
             }).execute(token, request)
-        return if (nativeScroll && result.attempted && !result.accepted && result.reason == "LIST_NAVIGATION_REJECTED")
-            result.copy(reason = "NATIVE_SCROLL_BOUNDARY_OR_REJECTION") else result
+        return result
     }
 
     fun openVisualOnce(token: Long, request: ActionRequest, completed: (Boolean) -> Unit): OpenResult {
