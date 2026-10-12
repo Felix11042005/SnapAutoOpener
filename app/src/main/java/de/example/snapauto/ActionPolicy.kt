@@ -2,7 +2,8 @@ package de.example.snapauto
 
 enum class ActionKind { OPEN_SNAP, ADVANCE_SNAP, SCROLL_LIST, BACK }
 data class ActionRequest(val kind: ActionKind, val snapshot: UiSnapshot, val target: Box? = null,
-    val nodeIndex: Int? = null, val visual: VisualTapProof? = null)
+    val nodeIndex: Int? = null, val visual: VisualTapProof? = null,
+    val singleSnapTarget: Boolean = false)
 
 /** Explicit interactive authorization, fresh screen and direct status or confirmed visual evidence. */
 object ActionPolicy {
@@ -12,7 +13,8 @@ object ActionPolicy {
         if (session.mode != SessionMode.INTERACTIVE) return "DIAGNOSTIC_ONLY"
         if (session.actionAttempts > 0) return "ONE_ACTION_LIMIT"
         if (current == null || current != request.snapshot) return "STALE_SCREEN"
-        val evidence = ScreenRecognizer.inspect(current)
+        val evidence = if (request.kind == ActionKind.OPEN_SNAP && request.singleSnapTarget)
+            ScreenRecognizer.inspectSingleTarget(current) else ScreenRecognizer.inspect(current)
         if (evidence.screen != ScreenKind.CHAT_LIST) return "UNVERIFIED_SCREEN"
         if (request.kind == ActionKind.OPEN_SNAP) {
             request.visual?.let { proof ->

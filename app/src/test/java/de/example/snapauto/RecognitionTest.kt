@@ -34,6 +34,21 @@ class RecognitionTest {
         val nodes = s.nodes + UiNode(6, 0, listOf("Chats"), Box(350, 60, 550, 120))
         assertEquals(ScreenKind.UNKNOWN, recognize(s.copy(nodes = nodes)).screen)
     }
+    @Test fun singleTargetAllowsDuplicateTitleOnlyWithOneExactSingularRow() {
+        val s = chatFixture()
+        val duplicated = s.copy(nodes = s.nodes + UiNode(6, 0, listOf("Chats"), Box(350, 55, 550, 130)))
+        assertEquals(ScreenKind.UNKNOWN, recognize(duplicated).screen)
+        val single = ScreenRecognizer.inspectSingleTarget(duplicated)
+        assertEquals(ScreenKind.CHAT_LIST, single.screen)
+        assertEquals(listOf(Box(0, 240, 1000, 400)), single.rows)
+        assertEquals(ScreenKind.UNKNOWN, ScreenRecognizer.inspectSingleTarget(duplicated.copy(nodes = duplicated.nodes.map {
+            if (it.index == 5) it.copy(labels = listOf("7 neue Snaps")) else it
+        })).screen)
+        val second = duplicated.copy(nodes = duplicated.nodes + listOf(
+            UiNode(7, 3, emptyList(), Box(0, 410, 1000, 570)),
+            UiNode(8, 7, listOf("Neuer Snap"), Box(100, 470, 300, 510))))
+        assertEquals("SINGLE_SNAP_NOT_UNIQUE", ScreenRecognizer.inspectSingleTarget(second).reason)
+    }
     @Test fun missingUnreadFilterAllowsExactStatusInStructuralList() {
         val s = chatFixture().let { it.copy(nodes = it.nodes.filter { n -> n.index != 2 }) }
         val r = recognize(s)

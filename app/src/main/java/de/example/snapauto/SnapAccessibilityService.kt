@@ -122,7 +122,8 @@ class SnapAccessibilityService : AccessibilityService() {
         if (!session.accepts(session.generation, now) || session.mode != SessionMode.INTERACTIVE ||
             existingSelection.initial != null) return
         val snap = actionSnapshot()
-        val evidence = snap?.let(ScreenRecognizer::inspect)
+        val evidence = snap?.let { if (!batchMode && !fullMode) ScreenRecognizer.inspectSingleTarget(it)
+            else ScreenRecognizer.inspect(it) }
         if (snap != null && evidence != null) record("START_EVIDENCE", RecognitionReport.describe(snap, evidence, false))
         if (snap == null || evidence == null || !existingSelection.capture(snap, evidence)) {
             if (snap != null) record("ROW_STRUCTURE", RecognitionReport.structure(snap))
@@ -239,7 +240,8 @@ class SnapAccessibilityService : AccessibilityService() {
             return
         }
         val evidence = if (fullMode && inventory?.phase != InventoryPhase.FILTER && inventory != null)
-            ScreenRecognizer.inspectFiltered(snap) else ScreenRecognizer.inspect(snap)
+            ScreenRecognizer.inspectFiltered(snap) else if (session.mode == SessionMode.INTERACTIVE && !batchMode)
+            ScreenRecognizer.inspectSingleTarget(snap) else ScreenRecognizer.inspect(snap)
         val stable = stability.observe(snap)
         val description = RecognitionReport.describe(snap, evidence, stable)
         recordOnce(evidence.reason, description)
@@ -304,7 +306,7 @@ class SnapAccessibilityService : AccessibilityService() {
                 stopDiagnostic("Sicherheitsstopp: ${evidence.reason}")
                 return
             }
-            if (!existingSelection.unchanged(snap)) {
+            if (!existingSelection.sameSingleTarget(snap, evidence)) {
                 stopDiagnostic("Liste seit Bestandserfassung verändert; keine neuen Ziele aufgenommen.")
                 return
             }
@@ -518,7 +520,8 @@ class SnapAccessibilityService : AccessibilityService() {
     }
 
     private fun openVisualProof(capture: Capture, proof: VisualTapProof) {
-        val request = ActionRequest(ActionKind.OPEN_SNAP, capture.snapshot, proof.target.icon, visual = proof)
+        val request = ActionRequest(ActionKind.OPEN_SNAP, capture.snapshot, proof.target.icon, visual = proof,
+            singleSnapTarget = !batchMode && !fullMode)
         val result = actions.openVisualOnce(capture.token, request) { completed ->
             record("TAP_COMPLETION", "abgeschlossen=$completed; kein Nachweis einer Snap-Öffnung")
             if (!completed) stopDiagnostic("Symbol-Tipp von Android abgebrochen.")
@@ -539,10 +542,13 @@ class SnapAccessibilityService : AccessibilityService() {
     }
 
     private fun openNative(snap: UiSnapshot, target: UiNode) {
-        val row = ScreenRecognizer.inspect(snap).rows.singleOrNull { it.contains(target.bounds) }
+        val evidence = if (!batchMode && !fullMode) ScreenRecognizer.inspectSingleTarget(snap)
+            else ScreenRecognizer.inspect(snap)
+        val row = evidence.rows.singleOrNull { it.contains(target.bounds) }
         if (batchMode && row == null) { stopDiagnostic("Natives Ziel hat keine eindeutige Bestandszeile."); return }
         val result = actions.openSnapOnce(session.generation,
-            ActionRequest(ActionKind.OPEN_SNAP, snap, target.bounds, target.index))
+            ActionRequest(ActionKind.OPEN_SNAP, snap, target.bounds, target.index,
+                singleSnapTarget = !batchMode && !fullMode))
         record("OPEN_RESULT", "${result.reason}; versucht=${result.attempted}; angenommen=${result.accepted}")
         if (row != null) accountBatch(result, snap, row)
         if (!result.accepted) stopDiagnostic("Öffnungsversuch beendet: ${result.reason}")

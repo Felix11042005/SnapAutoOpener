@@ -39,6 +39,21 @@ class ExistingSnapSelectionTest {
         assertTrue(selection.controls.isEmpty())
         assertTrue(selection.capture(s, ScreenRecognizer.inspect(s)))
     }
+    @Test fun singleTargetSurvivesUnrelatedTreeChurnButRejectsAnotherSnapRow() {
+        val selection = ExistingSnapSelection()
+        val initial = directFixture().let { it.copy(nodes = it.nodes +
+            UiNode(6, 0, listOf("Chats"), Box(350, 55, 550, 130))) }
+        val evidence = ScreenRecognizer.inspectSingleTarget(initial)
+        assertTrue(selection.capture(initial, evidence))
+        val changedElsewhere = initial.copy(nodes = initial.nodes + UiNode(7, 3,
+            listOf("Updated timestamp"), Box(500, 420, 800, 450)))
+        assertTrue(selection.sameSingleTarget(changedElsewhere,
+            ScreenRecognizer.inspectSingleTarget(changedElsewhere)))
+        val another = initial.copy(nodes = initial.nodes + listOf(
+            UiNode(7, 3, emptyList(), Box(0, 410, 1000, 570)),
+            UiNode(8, 7, listOf("New Snap"), Box(100, 450, 300, 500))))
+        assertFalse(selection.sameSingleTarget(another, ScreenRecognizer.inspectSingleTarget(another)))
+    }
     @Test fun unknownAtExplicitStartCannotWaitForLaterIncomingTarget() {
         val selection = ExistingSnapSelection()
         val unclear = chatFixture().let { it.copy(nodes = it.nodes.filter { n -> n.index !in listOf(2, 5) }) }
