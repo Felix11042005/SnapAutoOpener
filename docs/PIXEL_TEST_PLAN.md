@@ -1,4 +1,4 @@
-# Pixel-8-Abnahme: 5.7-filter-scroll
+# Pixel-8-Abnahme: 5.8-direction-check
 
 Diese Tests wurden nicht auf einem echten Pixel durchgeführt. Unit-Tests verwenden synthetische Daten und isolierte Symbolausschnitte aus den bereitgestellten Aufnahmen. Sie belegen weder die Erkennungsqualität ganzer Fenster noch Private-Space-Kompatibilität oder Vertragskonformität. Live-Nutzung mit Snap klären (siehe Bestandsaufnahme).
 
@@ -9,7 +9,7 @@ Der neue mehrseitige Modus hat eine eigene [Abnahme für Filter, Scrollen, Erfas
 ## Installation und Profil
 
 1. Neueste erfolgreiche **Build APK**-Ausführung für main öffnen, Commit prüfen, unter **Artifacts → SnapAutoOpener-apk** die ZIP laden und `SnapAutoOpener.apk` entpacken. PR-Artifacts sind Debug-Validierungsbuilds, main verwendet wie bisher vorhandene Signiersecrets. Nicht zum Umgehen eines Signaturfehlers blind deinstallieren; den passenden signierten main-Build verwenden.
-2. Android-Version, Snapchat-Version, Sprache, Theme, Schrift-/Displaygröße und Installationsprofil notieren. APK zeigt 5.7-filter-scroll (36).
+2. Android-Version, Snapchat-Version, Sprache, Theme, Schrift-/Displaygröße und Installationsprofil notieren. APK zeigt 5.8-direction-check (37). Für den gesamten Bestand vor START am Listenanfang stehen; 5.8 erfasst ab der sichtbaren Seite nach unten und öffnet danach von unten auf dem Rückweg.
 3. Bedienungshilfe in den Android-Einstellungen aktivieren, soweit Android dies für diese Installation zulässt. Kein Benachrichtigungszugriff nötig. Wenn Android eine Aktivierung verhindert: Ergebnis notieren; keine Profil-/Sicherheitsumgehung.
 4. Hauptprofil und entsperrtes Private Space getrennt prüfen. Eine Paket-Sichtbarkeitsmeldung beweist nicht, welche Profilkopie beobachtet wird. Im Private Space installierte Dienstkopie kann andere Möglichkeiten haben; nicht als bereits unterstützt voraussetzen.
 

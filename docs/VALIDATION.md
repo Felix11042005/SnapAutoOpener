@@ -1,5 +1,13 @@
 # Validierung
 
+## 5.8-direction-check (versionCode 37)
+
+Ausgangspunkt: `ff8ab95` (5.7). Lokal wurden alle Android-unabhängigen Produktklassen und sämtliche JUnit-Tests mit Java 17 / Kotlin 2.1.0 kompiliert: **204 Tests erfolgreich**. Der neue gemeldete-Schleifen-Test erreicht mit acht visuellen Zielen, ohne native Klickziele und trotz 1–2 Pixel Zittern den Tippadapter. Weitere Regressionen prüfen Listen-/Fingerrichtung, gegenläufige und nicht belegbare Bewegung sowie weiterhin strenge Bildprüfung vor einer Öffnung. [Fehleranalyse und gelesene Vergleichsprojekte](SCROLL_FIX.md).
+
+Android-Build, Lint und APK-Signaturprüfung erfolgen vor Auslieferung in der bestehenden Build-APK-Pipeline; maßgeblich sind die Actions-Ergebnisse des ausgelieferten Commits. Kein lokales Android-SDK und kein Pixel-Gerät verfügbar. Die vollständige Erfassung beginnt nun auf der sichtbaren Startseite; für alle Seiten muss der Nutzer vor START am Listenanfang stehen. Keine Abnahme echter Gesten oder vollständiger Snap-Wiedergabe behauptet.
+
+## Frühere Prüfungen
+
 Stand: 12.10.2026. Ausgangspunkt: `054a5a0`, vorheriger erfolgreicher main-Build #125.
 
 - Lokale Zusatzprüfung für 5.7: portable Temurin-Java-17-Laufzeit und Kotlin-2.1.0-Compiler im Arbeitsordner, alle Android-unabhängigen Produktklassen und sämtliche JUnit-Tests kompiliert; **194 Tests erfolgreich**. Kein lokaler Android-SDK-/Gradle-Build. Android-Kompilierung, Lint und APK-Verifikation bleiben Aufgabe der vorhandenen CI vor Übernahme auf main. Vier Filter-Testausschnitte wurden visuell auf Beschränkung auf Ungelesen-Label/Badge und Hintergrund geprüft; keine Kontakt-/Snap-Daten enthalten. Auch gewöhnliche Chatseiten ohne Symbole benötigen identische Listenpixel; bewegte Pixel verhindern eine falsche Listenend-Erkennung bei unveränderten Semantiklabels. Ganzbreite Filterleisten dürfen keinen exakten Ungelesen-Knopf ersetzen.

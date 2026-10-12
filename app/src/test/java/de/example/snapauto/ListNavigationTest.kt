@@ -76,9 +76,9 @@ class ListNavigationTest {
         })
         assertFalse(action.execute(token, ListNavigationRequest(ListNavigationKind.UP, proof)).attempted)
         assertTrue(run.filterReady(proof))
-        assertFalse(action.execute(token, ListNavigationRequest(ListNavigationKind.DOWN, proof)).attempted)
-        assertTrue(action.execute(token, ListNavigationRequest(ListNavigationKind.UP, proof)).accepted)
         assertFalse(action.execute(token, ListNavigationRequest(ListNavigationKind.UP, proof)).attempted)
+        assertTrue(action.execute(token, ListNavigationRequest(ListNavigationKind.DOWN, proof)).accepted)
+        assertFalse(action.execute(token, ListNavigationRequest(ListNavigationKind.DOWN, proof)).attempted)
         assertEquals(1, calls)
     }
     @Test fun diagnosticsExpiredProofAndOpenAttemptBlockNavigation() {
@@ -90,7 +90,7 @@ class ListNavigationTest {
             if (case == 3) assertTrue(session.claimOpenAttempt(token, 100))
             val action = ListNavigationOnce(session, { if (case == 2) 3200 else 700 }, { s }, run,
                 ListNavigationPort { _, _, _, _ -> fail("blocked navigation reached adapter"); true })
-            assertFalse(action.execute(token, ListNavigationRequest(ListNavigationKind.UP, proof)).attempted)
+            assertFalse(action.execute(token, ListNavigationRequest(ListNavigationKind.DOWN, proof)).attempted)
         }
     }
     @Test fun scrollRechecksStopImmediatelyBeforeDispatch() {
@@ -100,6 +100,6 @@ class ListNavigationTest {
         val action = ListNavigationOnce(session, { 700 }, { s }, run, ListNavigationPort { _, _, _, authorize ->
             session.stop(); assertFalse(authorize()); false
         })
-        assertFalse(action.execute(token, ListNavigationRequest(ListNavigationKind.UP, proof)).attempted)
+        assertFalse(action.execute(token, ListNavigationRequest(ListNavigationKind.DOWN, proof)).attempted)
     }
 }

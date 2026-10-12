@@ -81,16 +81,28 @@ object UnreadChip {
 data class PageObservation(val chip: ChipObservation?, val icons: List<VisualIcon>, val contentHash: Long = 0)
 
 class ConfirmedPage private constructor(val token: Long, val snapshot: UiSnapshot,
-    val observation: PageObservation, val firstAt: Long, val confirmedAt: Long) {
+    val observation: PageObservation, val firstAt: Long, val confirmedAt: Long,
+    private val firstObservation: PageObservation) {
     fun fresh(token: Long, current: UiSnapshot, now: Long) = this.token == token && snapshot == current &&
         now - confirmedAt in 0..2_500
+    val verifiedRows: List<Box> get() = observation.icons.filter { icon ->
+        firstObservation.icons.count { it.row == icon.row && it.icon == icon.icon } == 1 &&
+            observation.icons.count { it.row == icon.row } == 1
+    }.map { it.row }
+    /** Navigation may ignore unrelated pixels. A tap may not ignore its own row pixels. */
+    fun openingProof(row: Box): VisualTapProof? {
+        val icon = observation.icons.singleOrNull { it.row == row } ?: return null
+        if (firstObservation.icons.singleOrNull { it.row == row } != icon) return null
+        return VisualTapProof.confirmed(token, snapshot, icon, firstAt, confirmedAt)
+    }
     companion object {
-        internal fun create(token: Long, snapshot: UiSnapshot, observation: PageObservation, firstAt: Long, now: Long) =
-            ConfirmedPage(token, snapshot, observation, firstAt, now)
+        internal fun create(token: Long, snapshot: UiSnapshot, observation: PageObservation, firstAt: Long, now: Long,
+            firstObservation: PageObservation = observation) =
+            ConfirmedPage(token, snapshot, observation, firstAt, now, firstObservation)
     }
 }
 
-class PageConfirmation {
+class PageConfirmation(private val navigationOnly: Boolean = false) {
     private var first: Triple<Long, UiSnapshot, PageObservation>? = null
     private var firstAt = 0L
     fun reset() { first = null }
@@ -99,8 +111,10 @@ class PageConfirmation {
         val previous = first
         if (previous == null) { first = value; firstAt = now; return null }
         first = null
-        return if (value == previous && now - firstAt in 300..2_500)
-            ConfirmedPage.create(token, snapshot, observation, firstAt, now) else null
+        val same = if (navigationOnly) previous.first == token && previous.second == snapshot &&
+            previous.third.chip?.state == observation.chip?.state else value == previous
+        return if (same && now - firstAt in 300..2_500)
+            ConfirmedPage.create(token, snapshot, observation, firstAt, now, previous.third) else null
     }
     val awaitingSecond get() = first != null
 }
