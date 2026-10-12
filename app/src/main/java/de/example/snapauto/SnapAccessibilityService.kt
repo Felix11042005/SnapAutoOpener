@@ -65,7 +65,7 @@ class SnapAccessibilityService : AccessibilityService() {
 
     private data class Capture(val token: Long, val epoch: Long, val time: Long, val snapshot: UiSnapshot)
     private data class ImageAnalysis(val detail: String, val target: VisualIcon? = null,
-        val targets: List<VisualIcon> = emptyList(), val chip: ChipObservation? = null)
+        val targets: List<VisualIcon> = emptyList(), val chip: ChipObservation? = null, val contentHash: Long? = null)
     private val actions by lazy {
         AndroidActionExecutor(this, handler, session, ::actionSnapshot) { record("ACTION", it) }
     }
@@ -406,8 +406,10 @@ class SnapAccessibilityService : AccessibilityService() {
 
     private fun processInventoryPage(capture: Capture, analysis: ImageAnalysis) {
         val run = inventory ?: return
+        val contentHash = analysis.contentHash
+        if (contentHash == null) { stopDiagnostic("Bestandsbild oder Listenfläche nicht auswertbar; keine Navigation."); return }
         val page = pageConfirmation.observe(capture.token, capture.snapshot,
-            PageObservation(analysis.chip, analysis.targets), capture.time)
+            PageObservation(analysis.chip, analysis.targets, contentHash), capture.time)
         if (page == null) {
             record("PAGE_CONFIRMATION", if (pageConfirmation.awaitingSecond) "SECOND_IMAGE_REQUIRED" else "PAGE_CHANGED_OR_EXPIRED")
             if (!pageConfirmation.awaitingSecond) stopDiagnostic("Bestandsseite während Doppelprüfung verändert.")
@@ -435,7 +437,7 @@ class SnapAccessibilityService : AccessibilityService() {
         val evidence = ScreenRecognizer.inspectFiltered(snap)
         val native = ScreenRecognizer.directSnapControls(snap)
         val nativeRows = native.mapNotNull { control -> evidence.rows.singleOrNull { it.contains(control.bounds) } }
-        val decision = run.page(snap, evidence, analysis.targets.map { it.row } + nativeRows)
+        val decision = run.page(snap, evidence, analysis.targets.map { it.row } + nativeRows, contentHash)
         record("INVENTORY_PAGE", "Phase=${run.phase}; Seiten=${run.pages}; ursprüngliche Ziele=${run.roster.size}; verbleibend=${run.roster.remaining}; Entscheidung=${decision.reason}")
         status = when (run.phase) {
             InventoryPhase.FILTER -> "Ungelesen aktivieren."
@@ -623,6 +625,19 @@ class SnapAccessibilityService : AccessibilityService() {
                 ((it.bottom - bounds.top) * sy).roundToInt()) }
             val pixels = IntArray(scaled.width * scaled.height)
             scaled.getPixels(pixels, 0, scaled.width, 0, 0, scaled.width, scaled.height)
+            val contentHash = if (fullMode) {
+                val evidence = ScreenRecognizer.inspectFiltered(snap)
+                val region = ChatListSurface.find(snap, evidence)?.region
+                if (region == null) null else {
+                    val area = Box(((region.left - bounds.left) * sx).roundToInt(),
+                        ((region.top - bounds.top) * sy).roundToInt(), ((region.right - bounds.left) * sx).roundToInt(),
+                        ((region.bottom - bounds.top) * sy).roundToInt())
+                    var hash = -3750763034362895579L
+                    for (y in area.top until area.bottom) for (x in area.left until area.right)
+                        hash = (hash xor pixels[y * scaled.width + x].toLong()) * 1099511628211L
+                    hash
+                }
+            } else null
             val filter = ScreenRecognizer.unreadControl(snap)
             val chip = if (fullMode && filter != null) {
                 val label = filter.bounds
@@ -649,7 +664,7 @@ class SnapAccessibilityService : AccessibilityService() {
                     (b.bottom / sy + bounds.top).roundToInt()))
             }
             return ImageAnalysis("Fenster=${bitmap.width}x${bitmap.height}; Farbhinweise=${candidates.size}; Bildschirmpositionen=$positions; " +
-                "eindeutige gefüllte Snap-Symbole=${mapped.size}; Filter-Bild=${chip?.state ?: "nicht geprüft"}. Farbhilfe allein beweist keinen Snap.", mapped.firstOrNull(), mapped, chip)
+                "eindeutige gefüllte Snap-Symbole=${mapped.size}; Filter-Bild=${chip?.state ?: "nicht geprüft"}. Farbhilfe allein beweist keinen Snap.", mapped.firstOrNull(), mapped, chip, contentHash)
         } finally { if (scaled !== bitmap) scaled.recycle() }
     }
 

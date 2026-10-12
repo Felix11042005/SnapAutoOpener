@@ -50,6 +50,12 @@ class FullInventoryTest {
         assertEquals(ScreenKind.CHAT_LIST, evidence(s).screen)
         assertNotNull(ChatListSurface.find(s, evidence(s)))
     }
+    @Test fun pixelMovementPreventsFalseListBoundaryWhenSemanticsStaySame() {
+        val s = inventoryPage(); val run = ready(s)
+        for (hash in listOf(1L, 2L, 3L, 3L))
+            assertEquals(InventoryStep.SCROLL_UP, run.page(s, evidence(s), rows(s), hash).step)
+        assertEquals(InventoryStep.SCROLL_DOWN, run.page(s, evidence(s), rows(s), 3L).step)
+    }
     @Test fun emptyInventoryFinishesWithoutOpening() {
         val s = inventoryPage(emptyList()); val run = ready(s)
         repeat(4) { assertNotEquals(InventoryStep.OPEN, step(run, s).step) }

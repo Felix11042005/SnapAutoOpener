@@ -62,4 +62,10 @@ class UnreadChipTest {
         tracker.observe(1, s, observation, 100); tracker.reset()
         assertNull(tracker.observe(1, s, observation, 600)); assertTrue(tracker.awaitingSecond)
     }
+    @Test fun changedOrdinaryChatPixelsInvalidateOtherwiseEmptyPageProof() {
+        val s = inventoryPage(emptyList(), filter = false); val tracker = PageConfirmation()
+        assertNull(tracker.observe(1, s, PageObservation(null, emptyList(), 111), 100))
+        assertNull(tracker.observe(1, s, PageObservation(null, emptyList(), 112), 600))
+        assertFalse(tracker.awaitingSecond)
+    }
 }

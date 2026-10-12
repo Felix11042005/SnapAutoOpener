@@ -56,6 +56,16 @@ class ListNavigationTest {
         })
         assertFalse(action.execute(token, ListNavigationRequest(ListNavigationKind.FILTER, confirmedPage(s, token))).attempted)
     }
+    @Test fun wholeFilterStripCannotSubstituteForExactUnreadButton() {
+        val s = initial.copy(nodes = initial.nodes.map { if (it.index == 2) it.copy(bounds = Box(0, 150, 1000, 210)) else it })
+        assertNull(ScreenRecognizer.unreadControl(s))
+        val session = DiagnosticSession(); val token = session.start(0, mode = SessionMode.INTERACTIVE)
+        val action = ListNavigationOnce(session, { 700 }, { s }, FullInventory(s), ListNavigationPort { _, _, _, _ ->
+            fail("whole strip might contain My AI; must not click"); true
+        })
+        assertFalse(action.execute(token, ListNavigationRequest(ListNavigationKind.FILTER,
+            confirmedPage(s, token, FilterState.NOT_SELECTED))).attempted)
+    }
     @Test fun scrollingRequiresEstablishedContextAndCorrectDirection() {
         val s = inventoryPage(); val run = FullInventory(s); val session = DiagnosticSession()
         val token = session.start(0, mode = SessionMode.INTERACTIVE); var calls = 0

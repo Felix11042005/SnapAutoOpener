@@ -116,11 +116,11 @@ class FullInventory(val owner: UiSnapshot) {
         return true
     }
 
-    fun page(snapshot: UiSnapshot, evidence: Recognition, verifiedRows: List<Box>): InventoryDecision {
+    fun page(snapshot: UiSnapshot, evidence: Recognition, verifiedRows: List<Box>, contentHash: Long? = null): InventoryDecision {
         if (!sameWindow(snapshot) || evidence.screen != ScreenKind.CHAT_LIST || phase == InventoryPhase.FILTER)
             return stop("INVENTORY_SURFACE_INVALID")
         val surface = ChatListSurface.find(snapshot, evidence) ?: return stop("INVENTORY_LIST_AMBIGUOUS")
-        val fingerprint = fingerprint(snapshot, surface.region)
+        val fingerprint = fingerprint(snapshot, surface.region) + ":$contentHash"
         previousScrollPage?.let { noMovement = if (it == fingerprint) noMovement + 1 else 0 }
         previousScrollPage = null
         if (phase == InventoryPhase.TOP_SCAN && noMovement >= 2) {

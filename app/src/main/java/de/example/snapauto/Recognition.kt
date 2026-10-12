@@ -77,6 +77,7 @@ object ScreenRecognizer {
 
     fun unreadControl(snapshot: UiSnapshot): UiNode? = snapshot.nodes.filter {
         it.visible && it.enabled && snapshot.bounds.contains(it.bounds) &&
+            it.bounds.height <= snapshot.bounds.height / 8 && it.bounds.width <= snapshot.bounds.width * .8 &&
             it.labels.any { label -> unreadLabel.matches(normalized(label)) }
     }.distinctBy { it.bounds }.singleOrNull()
 

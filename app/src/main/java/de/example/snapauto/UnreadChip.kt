@@ -78,7 +78,7 @@ object UnreadChip {
     }
 }
 
-data class PageObservation(val chip: ChipObservation?, val icons: List<VisualIcon>)
+data class PageObservation(val chip: ChipObservation?, val icons: List<VisualIcon>, val contentHash: Long = 0)
 
 class ConfirmedPage private constructor(val token: Long, val snapshot: UiSnapshot,
     val observation: PageObservation, val firstAt: Long, val confirmedAt: Long) {
