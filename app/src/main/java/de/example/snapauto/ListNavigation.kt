@@ -31,7 +31,7 @@ class ListNavigationOnce(private val session: DiagnosticSession, private val now
                     request.page.observation.chip?.state == FilterState.NOT_SELECTED
             else inventory.phase !in setOf(InventoryPhase.FILTER, InventoryPhase.FINISHED) &&
                 evidence.filter != FilterState.NOT_SELECTED &&
-                (request.kind == ListNavigationKind.UP) == (inventory.phase in setOf(InventoryPhase.TOP_SCAN, InventoryPhase.TOP_OPEN)) &&
+                (request.kind == ListNavigationKind.DOWN) == (inventory.phase == InventoryPhase.SCAN) &&
                 (filter == null || request.page.observation.chip?.state == FilterState.SELECTED)
         }
         if (!allowed() || target == null || region == null) return OpenResult(false, false, "LIST_NAVIGATION_BLOCKED")

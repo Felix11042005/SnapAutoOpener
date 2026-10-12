@@ -68,4 +68,30 @@ class UnreadChipTest {
         assertNull(tracker.observe(1, s, PageObservation(null, emptyList(), 112), 600))
         assertFalse(tracker.awaitingSecond)
     }
+    @Test fun navigationIgnoresUnrelatedPixelsButTapStillRequiresIdenticalTargetRow() {
+        val s = inventoryPage(); val row = ScreenRecognizer.inspect(s).rows.first()
+        val icon = VisualIcon(row, Box(120, row.top + 110, 132, row.top + 122), 100)
+        val first = PageObservation(ChipObservation(FilterState.SELECTED, 1), listOf(icon), 10)
+        fun confirm(second: PageObservation): ConfirmedPage {
+            val tracker = PageConfirmation(navigationOnly = true)
+            tracker.observe(1, s, first, 100)
+            return tracker.observe(1, s, second, 600)!!
+        }
+        val unrelated = confirm(first.copy(chip = ChipObservation(FilterState.SELECTED, 2), contentHash = 20))
+        assertEquals(listOf(row), unrelated.verifiedRows)
+        assertNotNull(unrelated.openingProof(row))
+        val changedTarget = confirm(first.copy(icons = listOf(icon.copy(frameHash = 101)), contentHash = 20))
+        assertEquals(listOf(row), changedTarget.verifiedRows)
+        assertNull(changedTarget.openingProof(row))
+        val disappeared = confirm(first.copy(icons = emptyList()))
+        assertTrue(disappeared.verifiedRows.isEmpty()); assertNull(disappeared.openingProof(row))
+    }
+    @Test fun navigationStillRejectsChangedFilterOrAccessibilityTree() {
+        val s = inventoryPage(); val first = PageObservation(ChipObservation(FilterState.SELECTED, 1), emptyList())
+        for (filterChanged in listOf(true, false)) {
+            val tracker = PageConfirmation(navigationOnly = true); tracker.observe(1, s, first, 100)
+            assertNull(tracker.observe(1, if (filterChanged) s else shiftedRows(s, 1),
+                if (filterChanged) first.copy(chip = ChipObservation(FilterState.NOT_SELECTED, 1)) else first, 600))
+        }
+    }
 }

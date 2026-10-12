@@ -37,7 +37,7 @@ class SnapAccessibilityService : AccessibilityService() {
     private var batchMode = false
     private var fullMode = false
     private var inventory: FullInventory? = null
-    private val pageConfirmation = PageConfirmation()
+    private val pageConfirmation = PageConfirmation(navigationOnly = true)
     private var navigationPending = false
     private var settledAfter = 0L
     private var navigationAttempts = 0
@@ -141,7 +141,7 @@ class SnapAccessibilityService : AccessibilityService() {
         if (fullMode) {
             inventory = FullInventory(snap)
             batchDeadline = now + 1_200_000
-            record("INVENTORY_START", "Ungelesen prüfen/aktivieren; nach oben, vollständigen begrenzten Listendurchlauf erfassen, danach ursprüngliche Ziele öffnen. 20 Minuten Gesamtlaufzeit. Keine Snap-ID-Garantie.")
+            record("INVENTORY_START", "Ungelesen prüfen/aktivieren; ab sichtbarer START-Seite nach unten erfassen, danach erfasste Ziele auf dem Rückweg öffnen. Für vollständigen Bestand am Listenanfang starten. 20 Minuten Gesamtlaufzeit. Keine Snap-ID-Garantie.")
         } else if (batchMode) {
             batch.reset(snap)
             batchDeadline = now + 120_000
@@ -437,14 +437,12 @@ class SnapAccessibilityService : AccessibilityService() {
         val evidence = ScreenRecognizer.inspectFiltered(snap)
         val native = ScreenRecognizer.directSnapControls(snap)
         val nativeRows = native.mapNotNull { control -> evidence.rows.singleOrNull { it.contains(control.bounds) } }
-        val decision = run.page(snap, evidence, analysis.targets.map { it.row } + nativeRows, contentHash)
-        record("INVENTORY_PAGE", "Phase=${run.phase}; Seiten=${run.pages}; ursprüngliche Ziele=${run.roster.size}; verbleibend=${run.roster.remaining}; Entscheidung=${decision.reason}")
+        val decision = run.page(snap, evidence, page.verifiedRows + nativeRows, contentHash)
+        record("INVENTORY_PAGE", "Phase=${run.phase}; Seiten=${run.pages}; Statuszeilen=${evidence.rows.size}; visuell bestätigt=${page.verifiedRows.size}; native Ziele=${nativeRows.size}; ursprüngliche Ziele=${run.roster.size}; verbleibend=${run.roster.remaining}; Bewegung=${run.lastMotion}; Entscheidung=${decision.reason}")
         status = when (run.phase) {
             InventoryPhase.FILTER -> "Ungelesen aktivieren."
-            InventoryPhase.TOP_SCAN -> "Scrolle zum Listenanfang für die Bestandsaufnahme."
-            InventoryPhase.SCAN -> "Erfasse vorhandene Snap-Zeilen über mehrere Listenseiten."
-            InventoryPhase.TOP_OPEN -> "Bestand erfasst; kehre zum Listenanfang zurück."
-            InventoryPhase.OPEN -> "Öffne ausschließlich Ziele aus der abgeschlossenen Bestandsaufnahme."
+            InventoryPhase.SCAN -> "Erfasse ab START nach unten: ${run.pages} Seiten, ${run.roster.size} Ziele. Noch keine Öffnung."
+            InventoryPhase.OPEN -> "Öffne erfasste Ziele vom Listenende zurück; verbleibend=${run.roster.remaining}."
             InventoryPhase.FINISHED -> "Bestandsdurchlauf beendet."
         }
         when (decision.step) {
@@ -456,14 +454,13 @@ class SnapAccessibilityService : AccessibilityService() {
                 val row = decision.row ?: return
                 val control = native.firstOrNull { row.contains(it.bounds) }
                 if (control != null) { openNative(snap, control); return }
-                val icon = page.observation.icons.singleOrNull { it.row == row }
-                if (icon == null) {
+                val proof = page.openingProof(row)
+                if (proof == null) {
                     run.roster.skip(snap, row)
-                    record("INVENTORY_TARGET_SKIPPED", "Ursprüngliches Symbol nicht erneut bestätigt.")
+                    record("INVENTORY_TARGET_SKIPPED", "Ursprüngliches Symbol oder seine vollständigen Zeilenpixel nicht in beiden Aufnahmen bestätigt.")
                     renewInventoryCycle()
                     return
                 }
-                val proof = VisualTapProof.confirmed(capture.token, snap, icon, page.firstAt, page.confirmedAt)
                 openVisualProof(capture, proof)
             }
         }

@@ -82,11 +82,11 @@ class InventoryRoster {
     fun finish() { skipped += pending.size; pending.clear() }
 }
 
-enum class InventoryPhase { FILTER, TOP_SCAN, SCAN, TOP_OPEN, OPEN, FINISHED }
+enum class InventoryPhase { FILTER, SCAN, OPEN, FINISHED }
 enum class InventoryStep { SCROLL_UP, SCROLL_DOWN, OPEN, DONE, STOP }
 data class InventoryDecision(val step: InventoryStep, val reason: String, val row: Box? = null)
 
-/** Two-pass bounded traversal: inventory first, then only frozen targets. */
+/** Capture from the visible starting page down, then open frozen targets on the return path. */
 class FullInventory(val owner: UiSnapshot) {
     val roster = InventoryRoster()
     var phase = InventoryPhase.FILTER
@@ -98,8 +98,13 @@ class FullInventory(val owner: UiSnapshot) {
     var pages = 0
         private set
     private var previousScrollPage: String? = null
+    private var previousScrollSnapshot: UiSnapshot? = null
+    private var previousScrollHash: Long? = null
+    private var previousDirection: ListNavigationKind? = null
     private var noMovement = 0
     private val scanPages = mutableSetOf<String>()
+    var lastMotion = "NO_PENDING_SCROLL"
+        private set
 
     fun sameWindow(snapshot: UiSnapshot) = snapshot.packageName == ScreenRecognizer.TARGET_PACKAGE &&
         snapshot.windowId == owner.windowId && snapshot.bounds == owner.bounds
@@ -112,7 +117,7 @@ class FullInventory(val owner: UiSnapshot) {
     fun filterReady(page: ConfirmedPage): Boolean {
         if (phase != InventoryPhase.FILTER || !sameWindow(page.snapshot) ||
             ScreenRecognizer.unreadControl(page.snapshot) == null || page.observation.chip?.state != FilterState.SELECTED) return false
-        phase = InventoryPhase.TOP_SCAN
+        phase = InventoryPhase.SCAN
         return true
     }
 
@@ -120,23 +125,28 @@ class FullInventory(val owner: UiSnapshot) {
         if (!sameWindow(snapshot) || evidence.screen != ScreenKind.CHAT_LIST || phase == InventoryPhase.FILTER)
             return stop("INVENTORY_SURFACE_INVALID")
         val surface = ChatListSurface.find(snapshot, evidence) ?: return stop("INVENTORY_LIST_AMBIGUOUS")
-        val fingerprint = fingerprint(snapshot, surface.region) + ":$contentHash"
-        previousScrollPage?.let { noMovement = if (it == fingerprint) noMovement + 1 else 0 }
-        previousScrollPage = null
-        if (phase == InventoryPhase.TOP_SCAN && noMovement >= 2) {
-            phase = InventoryPhase.SCAN; noMovement = 0
+        val fingerprint = fingerprint(snapshot, surface.region)
+        previousScrollPage?.let { previous ->
+            val before = previousScrollSnapshot
+            val direction = previousDirection
+            val motion = if (before != null && direction != null && contentHash != null && previousScrollHash != null)
+                ScrollMotion.assess(before, snapshot, direction, previous == fingerprint && previousScrollHash == contentHash)
+            else if (previous == fingerprint) ScrollMotionKind.UNCHANGED else ScrollMotionKind.EXPECTED
+            lastMotion = motion.name
+            if (motion == ScrollMotionKind.REVERSED) return stop("SCROLL_DIRECTION_REVERSED")
+            if (motion == ScrollMotionKind.UNVERIFIED) return stop("SCROLL_MOVEMENT_UNVERIFIED")
+            noMovement = if (motion == ScrollMotionKind.UNCHANGED) noMovement + 1 else 0
         }
+        previousScrollPage = null
+        previousScrollSnapshot = null
         if (phase == InventoryPhase.SCAN) {
             scanPages += fingerprint; pages = scanPages.size
             if (pages > 50 || !roster.add(snapshot, evidence, verifiedRows)) return stop("INVENTORY_SCAN_LIMIT")
             if (noMovement >= 2) {
                 roster.seal()
                 if (roster.size == 0) return done("NO_VERIFIED_SNAP_TARGETS")
-                phase = InventoryPhase.TOP_OPEN; noMovement = 0
+                phase = InventoryPhase.OPEN; noMovement = 0
             }
-        }
-        if (phase == InventoryPhase.TOP_OPEN && noMovement >= 2) {
-            phase = InventoryPhase.OPEN; noMovement = 0
         }
         if (phase == InventoryPhase.OPEN) {
             val row = roster.nextVisible(snapshot, evidence)
@@ -145,10 +155,14 @@ class FullInventory(val owner: UiSnapshot) {
         }
         if (phase == InventoryPhase.FINISHED) return InventoryDecision(InventoryStep.DONE, "INVENTORY_FINISHED")
         if (scrolls >= 300) return stop("INVENTORY_SCROLL_LIMIT")
-        previousScrollPage = fingerprint; scrolls++
-        return if (phase in setOf(InventoryPhase.TOP_SCAN, InventoryPhase.TOP_OPEN))
-            InventoryDecision(InventoryStep.SCROLL_UP, "SEEK_LIST_TOP")
-        else InventoryDecision(InventoryStep.SCROLL_DOWN, if (phase == InventoryPhase.SCAN) "COLLECT_INITIAL_INVENTORY" else "SEEK_FROZEN_TARGET")
+        previousScrollPage = fingerprint
+        previousScrollSnapshot = snapshot
+        previousScrollHash = contentHash
+        previousDirection = if (phase == InventoryPhase.SCAN) ListNavigationKind.DOWN else ListNavigationKind.UP
+        scrolls++
+        return if (phase == InventoryPhase.SCAN)
+            InventoryDecision(InventoryStep.SCROLL_DOWN, "COLLECT_INITIAL_INVENTORY_DOWN")
+        else InventoryDecision(InventoryStep.SCROLL_UP, "SEEK_FROZEN_TARGET_ABOVE")
     }
 
     private fun done(reason: String): InventoryDecision {

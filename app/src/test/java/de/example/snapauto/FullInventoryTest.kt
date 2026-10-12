@@ -24,24 +24,21 @@ class FullInventoryTest {
     @Test fun twoPassTraversalCollectsOffscreenOriginalsBeforeAnyOpening() {
         val top = inventoryPage(listOf("Fixture A")); val bottom = inventoryPage(listOf("Fixture B"))
         val run = ready(top)
-        repeat(2) { assertEquals(InventoryStep.SCROLL_UP, step(run, top).step) }
         assertEquals(InventoryStep.SCROLL_DOWN, step(run, top).step)
         assertEquals(InventoryPhase.SCAN, run.phase)
         assertEquals(InventoryStep.SCROLL_DOWN, step(run, bottom).step)
         assertEquals(InventoryStep.SCROLL_DOWN, step(run, bottom).step)
-        assertEquals(InventoryStep.SCROLL_UP, step(run, bottom).step)
-        assertTrue(run.roster.sealed); assertEquals(2, run.roster.size)
-        assertEquals(InventoryPhase.TOP_OPEN, run.phase)
-        repeat(2) { assertEquals(InventoryStep.SCROLL_UP, step(run, top).step) }
-        val first = step(run, top)
+        val first = step(run, bottom)
         assertEquals(InventoryStep.OPEN, first.step)
-        assertTrue(run.roster.consume(top, first.row!!))
+        assertTrue(run.roster.sealed); assertEquals(2, run.roster.size)
+        assertEquals(InventoryPhase.OPEN, run.phase)
+        assertTrue(run.roster.consume(bottom, first.row!!))
         val arrival = inventoryPage(listOf("Later arrival"))
-        assertEquals(InventoryStep.SCROLL_DOWN, step(run, arrival).step)
-        val second = step(run, bottom)
+        assertEquals(InventoryStep.SCROLL_UP, step(run, arrival).step)
+        val second = step(run, top)
         assertEquals(InventoryStep.OPEN, second.step)
-        assertTrue(run.roster.consume(bottom, second.row!!))
-        assertEquals(InventoryStep.DONE, step(run, bottom).step)
+        assertTrue(run.roster.consume(top, second.row!!))
+        assertEquals(InventoryStep.DONE, step(run, top).step)
         assertEquals(2, run.roster.size)
     }
     @Test fun emptyPagesWithEstablishedFilterContextRemainTraversable() {
@@ -50,15 +47,16 @@ class FullInventoryTest {
         assertEquals(ScreenKind.CHAT_LIST, evidence(s).screen)
         assertNotNull(ChatListSurface.find(s, evidence(s)))
     }
-    @Test fun pixelMovementPreventsFalseListBoundaryWhenSemanticsStaySame() {
+    @Test fun decorativePixelChangesDoNotKeepBoundaryLoopAlive() {
         val s = inventoryPage(); val run = ready(s)
-        for (hash in listOf(1L, 2L, 3L, 3L))
-            assertEquals(InventoryStep.SCROLL_UP, run.page(s, evidence(s), rows(s), hash).step)
-        assertEquals(InventoryStep.SCROLL_DOWN, run.page(s, evidence(s), rows(s), 3L).step)
+        assertEquals(InventoryStep.SCROLL_DOWN, run.page(s, evidence(s), rows(s), 1L).step)
+        assertEquals(InventoryStep.SCROLL_DOWN, run.page(s, evidence(s), rows(s), 2L).step)
+        assertEquals(InventoryStep.OPEN, run.page(s, evidence(s), rows(s), 3L).step)
+        assertEquals("UNCHANGED", run.lastMotion)
     }
     @Test fun emptyInventoryFinishesWithoutOpening() {
         val s = inventoryPage(emptyList()); val run = ready(s)
-        repeat(4) { assertNotEquals(InventoryStep.OPEN, step(run, s).step) }
+        repeat(2) { assertNotEquals(InventoryStep.OPEN, step(run, s).step) }
         assertEquals(InventoryStep.DONE, step(run, s).step)
         assertEquals(0, run.roster.size)
     }
@@ -83,7 +81,7 @@ class FullInventoryTest {
     }
     @Test fun inventoryPageLimitStopsBeforeOpeningPartialInventory() {
         val s = inventoryPage(listOf("Fixture 0")); val run = ready(s)
-        repeat(3) { step(run, s) }
+        step(run, s)
         for (i in 1..49) assertEquals(InventoryStep.SCROLL_DOWN, step(run, inventoryPage(listOf("Fixture $i"))).step)
         assertEquals(InventoryStep.STOP, step(run, inventoryPage(listOf("Fixture 50"))).step)
         assertFalse(run.roster.sealed)

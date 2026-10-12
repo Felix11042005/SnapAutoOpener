@@ -52,24 +52,26 @@ class AndroidActionExecutor(
                     ListNavigationKind.DOWN -> if (target.canScrollForward) AccessibilityNodeInfo.ACTION_SCROLL_FORWARD else null
                 }
                 if (nativeAction != null && target.path.isNotEmpty()) {
+                    report("LIST_ROUTE kind=${operation.kind}; native=$nativeAction")
                     nativeScroll = operation.kind != ListNavigationKind.FILTER
                     val accepted = performExactNode(operation.page.snapshot, target, nativeAction, authorize) == true
                     handler.postDelayed({ if (session.accepts(token, SystemClock.elapsedRealtime())) completed(true) }, 400)
                     accepted
                 } else {
-                    val x = (region.left + region.right) / 2f
-                    val upper = region.top + region.height * .25f
-                    val lower = region.top + region.height * .75f
                     val filter = operation.kind == ListNavigationKind.FILTER
+                    val plan = if (filter) null else ListScroll.plan(region, operation.kind)
+                    if (!filter && plan == null) return@ListNavigationPort null
+                    val x = plan?.x ?: (region.left + region.right) / 2f
                     val start = if (filter) (region.top + region.bottom) / 2f
-                        else if (operation.kind == ListNavigationKind.DOWN) lower else upper
-                    val end = if (filter) start else if (operation.kind == ListNavigationKind.DOWN) upper else lower
+                        else plan!!.startY
+                    val end = if (filter) start else plan!!.endY
                     val excluded = ScreenRecognizer.inspectFiltered(operation.page.snapshot).excludedRows
                     if (!filter && excluded.any { row ->
                             row.contains(Box(x.toInt(), start.toInt(), x.toInt() + 1, start.toInt() + 1)) ||
                                 row.contains(Box(x.toInt(), end.toInt(), x.toInt() + 1, end.toInt() + 1)) }) null
                     else {
-                        val duration = if (filter) 80L else 350L
+                        val duration = if (filter) 80L else plan!!.duration
+                        report("LIST_ROUTE kind=${operation.kind}; gesture=($x,$start)->($x,$end); ms=$duration")
                         val path = Path().apply { moveTo(x, start); if (!filter) lineTo(x, end) }
                         val gesture = GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, duration)).build()
                         if (!authorize()) false else {

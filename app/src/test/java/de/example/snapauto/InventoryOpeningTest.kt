@@ -24,12 +24,13 @@ class InventoryOpeningTest {
             })
             assertTrue(action.execute(token, ListNavigationRequest(kind, proof)).accepted)
         }
-        repeat(3) { navigate(decide()) } // Reach top, collect first page, scroll down.
+        navigate(decide()) // Start by collecting the visible page and moving down.
         current = bottom
-        repeat(3) { navigate(decide()) } // Collect second page, detect end, scroll up.
+        repeat(2) { navigate(decide()) } // Collect second page and verify the boundary.
+        // The next decision seals the inventory and opens here, without seeking the top first.
+        val first = decide()
+        assertEquals(InventoryStep.OPEN, first.step)
         assertTrue(run.roster.sealed); assertEquals(2, run.roster.size); assertEquals(0, opens)
-        current = top
-        repeat(2) { navigate(decide()) }
         repeat(2) { index ->
             val decision = decide(); assertEquals(InventoryStep.OPEN, decision.step)
             val row = decision.row!!; val before = current
@@ -48,7 +49,7 @@ class InventoryOpeningTest {
             assertTrue(back.execute(token, current, flow).accepted)
             current = if (index == 0) inventoryPage(listOf("Later arrival")) else inventoryPage(emptyList())
             now += 1_000; assertEquals(ReturnStep.LIST_READY, flow.poll(current, now, true).step)
-            if (index == 0) { navigate(decide()); current = bottom }
+            if (index == 0) { navigate(decide()); current = top }
         }
         assertEquals(InventoryStep.DONE, decide().step)
         assertEquals(2, opens); assertEquals(2, backs); assertTrue(scrolls > 2)
