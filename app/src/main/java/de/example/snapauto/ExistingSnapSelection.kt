@@ -23,4 +23,17 @@ class ExistingSnapSelection {
     }
 
     fun unchanged(snapshot: UiSnapshot) = initial != null && initial == snapshot
+
+    /** Single-item mode tolerates accessibility churn outside the frozen target row. */
+    fun sameSingleTarget(snapshot: UiSnapshot, evidence: Recognition): Boolean {
+        val original = initial ?: return false
+        if (original.packageName != snapshot.packageName || original.windowId != snapshot.windowId ||
+            original.bounds != snapshot.bounds || evidence.screen != ScreenKind.CHAT_LIST ||
+            !evidence.rowsEvaluated || rows.size != 1 || evidence.rows != rows) return false
+        val row = rows.single()
+        val exact = snapshot.nodes.filter { node -> node.visible && node.enabled && row.contains(node.bounds) &&
+            node.labels.any { it.trim().lowercase(java.util.Locale.ROOT) in setOf("neuer snap", "new snap") } }
+            .distinctBy { it.bounds }
+        return exact.size == 1
+    }
 }

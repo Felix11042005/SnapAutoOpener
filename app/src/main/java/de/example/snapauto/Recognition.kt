@@ -83,10 +83,23 @@ object ScreenRecognizer {
 
     fun inspect(snapshot: UiSnapshot): Recognition = inspectInternal(snapshot, false)
 
+    /** Single-item path: tolerate duplicated accessibility title nodes, but authorize only one exact singular Snap row. */
+    fun inspectSingleTarget(snapshot: UiSnapshot): Recognition {
+        val evidence = inspectInternal(snapshot, false, allowDuplicateHeaders = true)
+        if (evidence.screen != ScreenKind.CHAT_LIST) return evidence
+        val exactSingular = snapshot.nodes.filter { node -> node.visible && node.enabled && snapshot.bounds.contains(node.bounds) &&
+            node.labels.any { normalized(it) in setOf("neuer snap", "new snap") } }.distinctBy { it.bounds }
+        if (exactSingular.size != 1 || evidence.rows.size != 1 || evidence.excludedRows.any { excluded ->
+                evidence.rows.single().intersects(excluded)
+            }) return evidence.copy(screen = ScreenKind.UNKNOWN, reason = "SINGLE_SNAP_NOT_UNIQUE", rows = emptyList(), rowsEvaluated = false)
+        return evidence
+    }
+
     /** Only the separately authorized inventory controller may retain established filter context. */
     fun inspectFiltered(snapshot: UiSnapshot): Recognition = inspectInternal(snapshot, true)
 
-    private fun inspectInternal(snapshot: UiSnapshot, confirmedUnreadContext: Boolean): Recognition {
+    private fun inspectInternal(snapshot: UiSnapshot, confirmedUnreadContext: Boolean,
+                                allowDuplicateHeaders: Boolean = false): Recognition {
         if (snapshot.packageName != TARGET_PACKAGE) return Recognition(ScreenKind.UNKNOWN, reason = "WRONG_PACKAGE")
         val visible = snapshot.nodes.filter { it.visible && it.enabled && snapshot.bounds.contains(it.bounds) }
         val exposed = snapshot.nodes.filter { it.visible && snapshot.bounds.intersects(it.bounds) }
@@ -131,8 +144,11 @@ object ScreenRecognizer {
             ?: (if (confirmedUnreadContext) listNodes.filter { it.bounds.height > snapshot.bounds.height / 4 }
                 .minOfOrNull { it.bounds.top } else null)
             ?: return unknown("HEADER_OR_FILTER_AMBIGUOUS")
-        val header = headers.filter { it.bounds.bottom <= anchorTop && !insideList(it) }.singleOrNull()
-            ?: return unknown("HEADER_OR_FILTER_AMBIGUOUS")
+        val headerCandidates = headers.filter { it.bounds.bottom <= anchorTop && !insideList(it) }
+        val header = if (allowDuplicateHeaders) {
+            headerCandidates.maxByOrNull { it.bounds.bottom }
+        } else headerCandidates.singleOrNull()
+        if (header == null) return unknown("HEADER_OR_FILTER_AMBIGUOUS")
         val contentBoundary = filter?.bounds?.bottom ?: header.bounds.bottom
         val lists = listNodes.filter { it.bounds.bottom > contentBoundary }
         if (lists.isEmpty()) return unknown("NO_LIST_STRUCTURE")

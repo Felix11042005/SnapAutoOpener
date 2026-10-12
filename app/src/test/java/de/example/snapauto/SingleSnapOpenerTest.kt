@@ -99,6 +99,14 @@ class SingleSnapOpenerTest {
         val request = ActionRequest(ActionKind.OPEN_SNAP, s, s.nodes.last().bounds, 5)
         assertTrue(opener.open(token, request).accepted)
     }
+    @Test fun singleTargetAuthorizationHandlesDuplicateHeaderButStillRequiresOneExactRow() {
+        val base = directFixture()
+        val s = base.copy(nodes = base.nodes + UiNode(6, 0, listOf("Chats"), Box(350, 55, 550, 130)))
+        val token = start(); current = s
+        val request = ActionRequest(ActionKind.OPEN_SNAP, s, s.nodes[5].bounds, 5, singleSnapTarget = true)
+        assertTrue(opener.open(token, request).accepted)
+        assertEquals(1, nativeClicks)
+    }
     @Test fun spoofedTargetIndexOrBoundsDoesNotCallPort() {
         val token = start()
         assertEquals("DIRECT_SNAP_CONTROL_REQUIRED", opener.open(token, request().copy(nodeIndex = 4)).reason)
