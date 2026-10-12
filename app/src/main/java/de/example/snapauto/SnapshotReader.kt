@@ -50,6 +50,8 @@ object SnapshotReader {
                 (node.isScrollable && (node.className?.contains("RecyclerView") == true ||
                     node.className?.contains("ListView") == true)),
             selectionKnown = node.isCheckable,
-            canClick = node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK }, path = path)
+            canClick = node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK }, path = path,
+            canScrollForward = node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_SCROLL_FORWARD },
+            canScrollBackward = node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD })
     }
 }

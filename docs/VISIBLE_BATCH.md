@@ -1,5 +1,7 @@
 # Sichtbarer Startbestand – 5.6
 
+5.7 ergänzt separat [Ungelesen-Aktivierung und mehrseitigen Bestand mit Scrollen](FILTER_SCROLL.md). Der hier beschriebene bisherige Modus bleibt erhalten.
+
 ## Anlass und Ablauf
 
 Der Nutzer hat mit 5.5 bestätigt, dass ein Symbol-Tipp einen Snap öffnet, die Ansicht danach aber stehen bleibt. Das belegt diesen einzelnen Gerätefall, keine allgemeine Erkennungsquote. 5.6 ergänzt deshalb einen separat wählbaren Bestandslauf; Einzelmodus und aktionsfreie Diagnose bleiben erhalten.

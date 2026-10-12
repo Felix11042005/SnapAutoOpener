@@ -18,7 +18,8 @@ data class UiNode(
     val selected: Boolean = false, val editable: Boolean = false,
     val clickable: Boolean = false, val list: Boolean = false,
     val selectionKnown: Boolean = false,
-    val canClick: Boolean = false, val path: List<Int> = emptyList()
+    val canClick: Boolean = false, val path: List<Int> = emptyList(),
+    val canScrollForward: Boolean = false, val canScrollBackward: Boolean = false
 )
 
 data class UiSnapshot(
@@ -74,7 +75,18 @@ object ScreenRecognizer {
         }.sortedWith(compareBy({ it.bounds.top }, { it.bounds.left }))
     }
 
-    fun inspect(snapshot: UiSnapshot): Recognition {
+    fun unreadControl(snapshot: UiSnapshot): UiNode? = snapshot.nodes.filter {
+        it.visible && it.enabled && snapshot.bounds.contains(it.bounds) &&
+            it.bounds.height <= snapshot.bounds.height / 8 && it.bounds.width <= snapshot.bounds.width * .8 &&
+            it.labels.any { label -> unreadLabel.matches(normalized(label)) }
+    }.distinctBy { it.bounds }.singleOrNull()
+
+    fun inspect(snapshot: UiSnapshot): Recognition = inspectInternal(snapshot, false)
+
+    /** Only the separately authorized inventory controller may retain established filter context. */
+    fun inspectFiltered(snapshot: UiSnapshot): Recognition = inspectInternal(snapshot, true)
+
+    private fun inspectInternal(snapshot: UiSnapshot, confirmedUnreadContext: Boolean): Recognition {
         if (snapshot.packageName != TARGET_PACKAGE) return Recognition(ScreenKind.UNKNOWN, reason = "WRONG_PACKAGE")
         val visible = snapshot.nodes.filter { it.visible && it.enabled && snapshot.bounds.contains(it.bounds) }
         val exposed = snapshot.nodes.filter { it.visible && snapshot.bounds.intersects(it.bounds) }
@@ -116,6 +128,8 @@ object ScreenRecognizer {
         // Snapchat also labels its bottom navigation "Chat". Resolve the title
         // relative to content, never by an assumed screen height or fixed strip.
         val anchorTop = filter?.bounds?.top ?: visualStatuses.minOfOrNull { it.bounds.top }
+            ?: (if (confirmedUnreadContext) listNodes.filter { it.bounds.height > snapshot.bounds.height / 4 }
+                .minOfOrNull { it.bounds.top } else null)
             ?: return unknown("HEADER_OR_FILTER_AMBIGUOUS")
         val header = headers.filter { it.bounds.bottom <= anchorTop && !insideList(it) }.singleOrNull()
             ?: return unknown("HEADER_OR_FILTER_AMBIGUOUS")
@@ -169,9 +183,26 @@ object ScreenRecognizer {
         // exposes full-row Snap statuses without any native click action.
         val rows = visualStatuses.mapNotNull { owningRow(it, boundary = contentBoundary) }
             .distinct().filter { row -> excludedRows.none { it.intersects(row) } }.take(30)
-        if (filter == null && rows.isEmpty()) return unknown("NO_UNOPENED_LIST_EVIDENCE")
+        if (filter == null && rows.isEmpty() && !confirmedUnreadContext) return unknown("NO_UNOPENED_LIST_EVIDENCE")
         return Recognition(ScreenKind.CHAT_LIST, filterState, "SEMANTIC_LIST", rows,
             excludedRows, rowsEvaluated = true, facts = facts)
+    }
+}
+
+data class ListSurface(val node: UiNode, val region: Box)
+
+object ChatListSurface {
+    fun find(snapshot: UiSnapshot, evidence: Recognition): ListSurface? {
+        if (evidence.screen != ScreenKind.CHAT_LIST) return null
+        val lists = snapshot.nodes.filter { it.visible && it.enabled && it.list &&
+            snapshot.bounds.contains(it.bounds) && it.bounds.width >= snapshot.bounds.width / 2 &&
+            it.bounds.height > snapshot.bounds.height / 4 && evidence.rows.all(it.bounds::contains) }
+            .distinctBy { it.bounds }.sortedByDescending { it.bounds.height }
+        val node = lists.firstOrNull() ?: return null
+        if (lists.drop(1).any { it.bounds.height == node.bounds.height }) return null
+        val filterBottom = ScreenRecognizer.unreadControl(snapshot)?.bounds?.bottom ?: node.bounds.top
+        val region = node.bounds.copy(top = maxOf(node.bounds.top, filterBottom))
+        return if (region.valid && region.height > snapshot.bounds.height / 4) ListSurface(node, region) else null
     }
 }
 
