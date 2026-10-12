@@ -40,6 +40,60 @@ class AndroidActionExecutor(
         }).execute(token, expected, flow).accepted
     }
 
+    fun navigateList(token: Long, request: ListNavigationRequest, inventory: FullInventory,
+        completed: (Boolean) -> Unit): OpenResult {
+        if (inFlight) return OpenResult(false, false, "ACTION_IN_FLIGHT")
+        var nativeScroll = false
+        val result = ListNavigationOnce(session, SystemClock::elapsedRealtime, currentSnapshot, inventory,
+            ListNavigationPort { operation, target, region, authorize ->
+                val nativeAction = when (operation.kind) {
+                    ListNavigationKind.FILTER -> if (target.canClick) AccessibilityNodeInfo.ACTION_CLICK else null
+                    ListNavigationKind.UP -> if (target.canScrollBackward) AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD else null
+                    ListNavigationKind.DOWN -> if (target.canScrollForward) AccessibilityNodeInfo.ACTION_SCROLL_FORWARD else null
+                }
+                if (nativeAction != null && target.path.isNotEmpty()) {
+                    nativeScroll = operation.kind != ListNavigationKind.FILTER
+                    val accepted = performExactNode(operation.page.snapshot, target, nativeAction, authorize) == true
+                    handler.postDelayed({ if (session.accepts(token, SystemClock.elapsedRealtime())) completed(true) }, 400)
+                    accepted
+                } else {
+                    val x = (region.left + region.right) / 2f
+                    val upper = region.top + region.height * .25f
+                    val lower = region.top + region.height * .75f
+                    val filter = operation.kind == ListNavigationKind.FILTER
+                    val start = if (filter) (region.top + region.bottom) / 2f
+                        else if (operation.kind == ListNavigationKind.DOWN) lower else upper
+                    val end = if (filter) start else if (operation.kind == ListNavigationKind.DOWN) upper else lower
+                    val excluded = ScreenRecognizer.inspectFiltered(operation.page.snapshot).excludedRows
+                    if (!filter && excluded.any { row ->
+                            row.contains(Box(x.toInt(), start.toInt(), x.toInt() + 1, start.toInt() + 1)) ||
+                                row.contains(Box(x.toInt(), end.toInt(), x.toInt() + 1, end.toInt() + 1)) }) null
+                    else {
+                        val duration = if (filter) 80L else 350L
+                        val path = Path().apply { moveTo(x, start); if (!filter) lineTo(x, end) }
+                        val gesture = GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, duration)).build()
+                        if (!authorize()) false else {
+                            val sequence = beginFlight(duration)
+                            val accepted = try { service.dispatchGesture(gesture, object : AccessibilityService.GestureResultCallback() {
+                                override fun onCompleted(gestureDescription: GestureDescription?) {
+                                    finishFlight(sequence)
+                                    if (session.accepts(token, SystemClock.elapsedRealtime())) completed(true)
+                                }
+                                override fun onCancelled(gestureDescription: GestureDescription?) {
+                                    finishFlight(sequence)
+                                    if (session.accepts(token, SystemClock.elapsedRealtime())) completed(false)
+                                }
+                            }, handler) } catch (failure: RuntimeException) { finishFlight(sequence); throw failure }
+                            if (!accepted) finishFlight(sequence)
+                            accepted
+                        }
+                    }
+                }
+            }).execute(token, request)
+        return if (nativeScroll && result.attempted && !result.accepted && result.reason == "LIST_NAVIGATION_REJECTED")
+            result.copy(reason = "NATIVE_SCROLL_BOUNDARY_OR_REJECTION") else result
+    }
+
     fun openVisualOnce(token: Long, request: ActionRequest, completed: (Boolean) -> Unit): OpenResult {
         if (inFlight) return OpenResult(false, false, "ACTION_IN_FLIGHT")
         return VisualSnapOpener(session, SystemClock::elapsedRealtime, currentSnapshot,
@@ -70,6 +124,11 @@ class AndroidActionExecutor(
 
     @Suppress("DEPRECATION")
     private fun clickExactControl(expected: UiSnapshot, control: UiNode, authorize: () -> Boolean): Boolean? {
+        return performExactNode(expected, control, AccessibilityNodeInfo.ACTION_CLICK, authorize)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun performExactNode(expected: UiSnapshot, control: UiNode, action: Int, authorize: () -> Boolean): Boolean? {
         val windows = service.windows
         var held: AccessibilityNodeInfo? = null
         try {
@@ -90,7 +149,7 @@ class AndroidActionExecutor(
             if (node.windowId != expected.windowId ||
                 SnapshotReader.describe(node, control.index, control.parent, control.path) != control) return null
             if (!authorize()) return null
-            return node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            return node.performAction(action)
         } finally {
             held?.recycle()
             windows.forEach { it.recycle() }

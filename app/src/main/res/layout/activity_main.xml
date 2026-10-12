@@ -6,7 +6,7 @@
         <TextView android:id="@+id/title" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:textSize="24sp" android:textStyle="bold" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="12dp" android:text="Sichtbaren Bestand öffnen: Modus bereitstellen, Snapchat-Chatliste anzeigen und dort START drücken. Bis zu 10 eindeutig erkannte sichtbare Zeilen werden beim START erfasst. Pro Zeile ein Öffnungsversuch; danach 5 Sekunden warten, einmal Android-Zurück und die Chatliste erneut prüfen. Veränderte oder verschwundene Ziele werden übersprungen. Es wird nicht gescrollt. Snapchat kann mehrere Snaps derselben Unterhaltung abspielen; einzelne alte und neue Snaps darin lassen sich nicht garantiert trennen."
+            android:layout_marginTop="12dp" android:text="Bestand mit Scrollen öffnen: Modus bereitstellen, gewünschte Snapchat-Chatliste anzeigen und dort START drücken. Die App aktiviert Ungelesen bei eindeutig erkanntem ausgeschaltetem Filter. Sie sucht den Listenanfang, erfasst Snap-Zeilen beim Herunterscrollen und beginnt anschließend die Abarbeitung der festgehaltenen Ziele. Pro Zeile ein Öffnungsversuch; danach etwa 5 Sekunden warten, Zurück und die Chatliste erneut prüfen. Einzelne alte und neue Snaps derselben Unterhaltung sind nicht garantiert trennbar."
             android:textSize="16sp" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="12dp" android:text="Snap untersagt nicht autorisierte automatisierte Drittanbieter-Interaktionen. Auch diese Diagnose ist nicht ausdrücklich freigegeben. Live-Nutzung bitte mit Snap klären. Offline-Tests greifen nicht auf Snapchat zu." />
@@ -16,8 +16,10 @@
             android:text="Bedienungshilfe öffnen" android:layout_marginTop="12dp" />
         <TextView android:id="@+id/serviceStatus" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="12dp" android:textIsSelectable="true" />
+        <Button android:id="@+id/startFullInventory" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="Bestand mit Ungelesen und Scrollen – bereitstellen" android:layout_marginTop="16dp" />
         <Button android:id="@+id/startExistingSnaps" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="Sichtbaren Bestand öffnen – bereitstellen" android:layout_marginTop="16dp" />
+            android:text="Nur sichtbaren Bestand öffnen – bereitstellen" />
         <Button android:id="@+id/startSingleSnap" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:text="Nur einen Snap öffnen – bereitstellen" />
         <Button android:id="@+id/startDiagnostic" android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -25,7 +27,7 @@
         <Button android:id="@+id/stopDiagnostic" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:text="STOP – sofort beenden" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="Gewünschte Snapchat-Instanz manuell öffnen. START über der sichtbaren Chatliste drücken. Keine späteren Zeilen werden ergänzt. STOP bleibt im Bedienfeld erreichbar, auch während der 5 Sekunden Wartezeit. Vorbereitung: 30 Sekunden; Bestandslauf: höchstens 120 Sekunden. Bei Tastatur, App-Wechsel oder unsicherer Rückkehr wird abgebrochen. Der Einzelmodus endet nach einem Öffnungsversuch."
+            android:text="START über der Chatliste drücken. STOP bleibt auch beim Scrollen und Warten erreichbar. Vorbereitung: 30 Sekunden. Scrollmodus: höchstens 20 Minuten, 50 Bestandsseiten, 200 Ziele und 300 Scrollversuche. Während der ersten Bestandsaufnahme eintreffende Inhalte sind nicht sicher vom älteren Bestand unterscheidbar; danach werden keine zusätzlichen Ziele aufgenommen. Der sichtbare Modus bleibt auf 10 Zeilen und 120 Sekunden begrenzt. Bei Tastatur, App-Wechsel oder unklarer Oberfläche wird abgebrochen."
             android:layout_marginTop="12dp" />
         <Button android:id="@+id/copyDiagnostic" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:text="Diagnose kopieren" android:layout_marginTop="12dp" />

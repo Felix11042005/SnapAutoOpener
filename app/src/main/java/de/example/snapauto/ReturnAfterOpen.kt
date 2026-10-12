@@ -8,7 +8,7 @@ data class ReturnDecision(val step: ReturnStep, val reason: String)
 /** One contextual recovery BACK after a completed, accepted opening action.
  * A changed screen is NOT labelled a verified Snap viewer. No viewer image is captured.
  * Only successful list recognition permits another opening. */
-class ReturnAfterOpen(private val before: UiSnapshot, private val openedAt: Long) {
+class ReturnAfterOpen(private val before: UiSnapshot, private val openedAt: Long, private val filteredContext: Boolean = false) {
     private var departed = false
     private var backAt: Long? = null
     private var sealed = false
@@ -17,7 +17,7 @@ class ReturnAfterOpen(private val before: UiSnapshot, private val openedAt: Long
         if (sealed) return stop("RETURN_FINISHED")
         if (now < openedAt || now - openedAt >= 15_000) return stop("RETURN_TIMEOUT")
         if (!sameWindow(current)) return stop("RETURN_WINDOW_CHANGED")
-        val evidence = ScreenRecognizer.inspect(current)
+        val evidence = if (filteredContext) ScreenRecognizer.inspectFiltered(current) else ScreenRecognizer.inspect(current)
         if (evidence.screen == ScreenKind.BLOCKED) return stop("RETURN_BLOCKED_${evidence.reason}")
         if (evidence.screen == ScreenKind.CHAT_LIST) {
             if (departed && stable) {

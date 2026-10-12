@@ -1,6 +1,10 @@
 # Validierung
 
-Stand: 11.10.2026. Ausgangspunkt: `054a5a0`, vorheriger erfolgreicher main-Build #125.
+Stand: 12.10.2026. Ausgangspunkt: `054a5a0`, vorheriger erfolgreicher main-Build #125.
+
+- Lokale Zusatzprüfung für 5.7: portable Temurin-Java-17-Laufzeit und Kotlin-2.1.0-Compiler im Arbeitsordner, alle Android-unabhängigen Produktklassen und sämtliche JUnit-Tests kompiliert; **191 Tests erfolgreich**. Kein lokaler Android-SDK-/Gradle-Build. Android-Kompilierung, Lint und APK-Verifikation bleiben Aufgabe der vorhandenen CI vor Übernahme auf main. Vier Filter-Testausschnitte wurden visuell auf Beschränkung auf Ungelesen-Label/Badge und Hintergrund geprüft; keine Kontakt-/Snap-Daten enthalten.
+
+- 5.7 ergänzt einen separaten Modus für bestätigte Ungelesen-Aktivierung und begrenzte mehrseitige Bestandsaufnahme vor dem Öffnen. Neue Tests prüfen Filterausschnitte aus Bild/Video, zwei unveränderte Seitenbilder, Navigation mit STOP/Neustart/Timeout/Fensterwechsel an der Adaptergrenze, Seitenübergänge, nachträgliche Ziele, geänderte/duplizierte Identitäten und Erfassungslimits. Bestehende 160 Tests bleiben erhalten. Lokal fehlen Java/Android-SDK; maßgeblich sind die CI-Ergebnisse des ausgelieferten Commits. Keine Pixel-Abnahme behauptet. [Ablauf und verbleibende Grenzen](FILTER_SCROLL.md).
 
 - 5.6 ergänzt den endlichen sichtbaren Startbestand und eine getrennte Rückkehrberechtigung nach einer abgeschlossenen angenommenen Öffnung. Neue Tests decken native und visuelle Abläufe mit zwei ursprünglichen Zielen und einer Rückkehr dazwischen, neue/verschobene/geänderte/duplizierte Zeilen, zehn-Zeilen-Limit, Rückkehrfristen, STOP/Timeout/Neustart/Fensterwechsel an der tatsächlichen Zurück-Adaptergrenze sowie Ablehnung/Ausnahme ohne Wiederholung ab. Alle bestehenden Einzelmodus-/Erkennungs-/Bild-/Diagnoseprüfungen bleiben bestehen. Die Fünf-Sekunden-Rücknavigation und der Gesamtdurchlauf sind noch nicht auf dem Pixel getestet. Der Nutzer hat nur das tatsächliche Öffnen eines Snaps mit 5.5 bestätigt. Pipeline und Signierung bleiben unverändert; maßgeblich sind die Ergebnisse des jeweiligen Commits.
 

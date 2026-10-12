@@ -1,5 +1,7 @@
 # Einzelöffnungsmodus – Stand und Pixel-Prüfung
 
+5.7 ergänzt separat [Ungelesen-Aktivierung und mehrseitigen Bestand mit Scrollen](FILTER_SCROLL.md). Der hier beschriebene bisherige Modus bleibt erhalten.
+
 5.6 ergänzt den separat wählbaren [sichtbaren Bestandslauf](VISIBLE_BATCH.md) mit Wartezeit, einmaliger kontextbezogener Zurück-Aktion und bestätigter Listenrückkehr vor dem nächsten ursprünglichen Ziel. Der folgende Abschnitt beschreibt weiterhin den Einzelmodus. Ein erfolgreicher einzelner Snap wurde mit 5.5 vom Nutzer bestätigt; der neue Gesamtablauf ist damit noch nicht am Gerät geprüft.
 
 ## Tatsächlich implementiert
