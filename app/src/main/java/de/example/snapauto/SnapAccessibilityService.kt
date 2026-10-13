@@ -690,19 +690,34 @@ class SnapAccessibilityService : AccessibilityService() {
         }
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
             if (session.mode == SessionMode.INTERACTIVE) addView(Button(this@SnapAccessibilityService).apply {
                 text = "START"
+                textSize = 12f
+                minWidth = 0
+                minHeight = 0
+                setPadding(0, 0, 0, 0)
                 contentDescription = if (fullMode) "Ungelesen aktivieren, Bestand durch Scrollen erfassen und öffnen"
                     else if (batchMode) "Sichtbaren Startbestand erfassen und nacheinander öffnen"
                     else "Sichtbaren Bestand erfassen und einen vorhandenen Snap öffnen"
                 setOnClickListener { isEnabled = false; captureExistingForOpening() }
-            })
-            addView(button)
+            }, LinearLayout.LayoutParams(dp(64), dp(48)))
+            button.textSize = 12f
+            button.minWidth = 0
+            button.minHeight = 0
+            button.setPadding(0, 0, 0, 0)
+            addView(button, LinearLayout.LayoutParams(dp(64), dp(48)))
         }
         val params = WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
-            PixelFormat.TRANSLUCENT).apply { gravity = Gravity.TOP or Gravity.END }
+            PixelFormat.TRANSLUCENT).apply {
+            // Snapchat's notification bell is on the top right. Keep this compact
+            // control strip over the non-actionable center title instead.
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            x = -dp(16)
+            y = dp(48)
+        }
         return try {
             getSystemService(WindowManager::class.java).addView(panel, params)
             stopButton = panel
@@ -715,6 +730,7 @@ class SnapAccessibilityService : AccessibilityService() {
         }
         stopButton = null
     }
+    private fun dp(value: Int) = (value * resources.displayMetrics.density).roundToInt()
     override fun onInterrupt() { stopDiagnostic("Bedienungshilfe unterbrochen") }
     override fun onUnbind(intent: Intent?): Boolean {
         stopDiagnostic("Bedienungshilfe getrennt")
@@ -728,3 +744,4 @@ class SnapAccessibilityService : AccessibilityService() {
         super.onDestroy()
     }
 }
+

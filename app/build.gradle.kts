@@ -8,8 +8,8 @@ android {
         applicationId = "de.example.snapauto"
         minSdk = 26
         targetSdk = 35
-        versionCode = 39
-        versionName = "5.8.2-single-snap"
+        versionCode = 40
+        versionName = "5.8.3-safe-overlay"
     }
 
     val keystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
@@ -56,3 +56,4 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")
 }
+
